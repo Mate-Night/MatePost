@@ -1,0 +1,56 @@
+{
+  "runtimeTarget": {
+    "name": ".NETCoreApp,Version=v8.0",
+    "signature": ""
+  },
+  "compilationOptions": {},
+  "targets": {
+    ".NETCoreApp,Version=v8.0": {
+      "PresentationLayer/1.0.0": {
+        "dependencies": {
+          "BusinessLogicLayer": "1.0.0",
+          "PersistanceLayer": "1.0.0"
+        },
+        "runtime": {
+          "PresentationLayer.dll": {}
+        }
+      },
+      "BusinessLogicLayer/1.0.0": {
+        "runtime": {
+          "BusinessLogicLayer.dll": {
+            "assemblyVersion": "1.0.0.0",
+            "fileVersion": "1.0.0.0"
+          }
+        }
+      },
+      "PersistanceLayer/1.0.0": {
+        "dependencies": {
+          "BusinessLogicLayer": "1.0.0"
+        },
+        "runtime": {
+          "PersistanceLayer.dll": {
+            "assemblyVersion": "1.0.0.0",
+            "fileVersion": "1.0.0.0"
+          }
+        }
+      }
+    }
+  },
+  "libraries": {
+    "PresentationLayer/1.0.0": {
+      "type": "project",
+      "serviceable": false,
+      "sha512": ""
+    },
+    "BusinessLogicLayer/1.0.0": {
+      "type": "project",
+      "serviceable": false,
+      "sha512": ""
+    },
+    "PersistanceLayer/1.0.0": {
+      "type": "project",
+      "serviceable": false,
+      "sha512": ""
+    }
+  }
+}

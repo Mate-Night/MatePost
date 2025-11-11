@@ -1,0 +1,41 @@
+C:\Users\malyt\source\repos\MatePost1\MatePost1\obj\Debug\net8.0\PresentationLayer.GeneratedMSBuildEditorConfig.editorconfig
+C:\Users\malyt\source\repos\MatePost1\MatePost1\obj\Debug\net8.0\PresentationLayer.AssemblyInfoInputs.cache
+C:\Users\malyt\source\repos\MatePost1\MatePost1\obj\Debug\net8.0\PresentationLayer.AssemblyInfo.cs
+C:\Users\malyt\source\repos\MatePost1\MatePost1\obj\Debug\net8.0\PresentationLayer.csproj.CoreCompileInputs.cache
+C:\Users\malyt\source\repos\MatePost1\MatePost1\obj\Debug\net8.0\PresentationLayer.csproj.AssemblyReference.cache
+C:\Users\malyt\source\repos\MatePost1\MatePost1\bin\Debug\net8.0\PresentationLayer.exe
+C:\Users\malyt\source\repos\MatePost1\MatePost1\bin\Debug\net8.0\PresentationLayer.deps.json
+C:\Users\malyt\source\repos\MatePost1\MatePost1\bin\Debug\net8.0\PresentationLayer.runtimeconfig.json
+C:\Users\malyt\source\repos\MatePost1\MatePost1\bin\Debug\net8.0\PresentationLayer.dll
+C:\Users\malyt\source\repos\MatePost1\MatePost1\bin\Debug\net8.0\PresentationLayer.pdb
+C:\Users\malyt\source\repos\MatePost1\MatePost1\bin\Debug\net8.0\BusinessLogicLayer.dll
+C:\Users\malyt\source\repos\MatePost1\MatePost1\bin\Debug\net8.0\PersistanceLayer.dll
+C:\Users\malyt\source\repos\MatePost1\MatePost1\bin\Debug\net8.0\BusinessLogicLayer.pdb
+C:\Users\malyt\source\repos\MatePost1\MatePost1\bin\Debug\net8.0\PersistanceLayer.pdb
+C:\Users\malyt\source\repos\MatePost1\MatePost1\obj\Debug\net8.0\Presenta.9C561136.Up2Date
+C:\Users\malyt\source\repos\MatePost1\MatePost1\obj\Debug\net8.0\PresentationLayer.dll
+C:\Users\malyt\source\repos\MatePost1\MatePost1\obj\Debug\net8.0\refint\PresentationLayer.dll
+C:\Users\malyt\source\repos\MatePost1\MatePost1\obj\Debug\net8.0\PresentationLayer.pdb
+C:\Users\malyt\source\repos\MatePost1\MatePost1\obj\Debug\net8.0\PresentationLayer.genruntimeconfig.cache
+C:\Users\malyt\source\repos\MatePost1\MatePost1\obj\Debug\net8.0\ref\PresentationLayer.dll
+C:\Users\Mate\source\repos\Mate-Night\MatePost\Presentation Layer\bin\Debug\net8.0\PresentationLayer.exe
+C:\Users\Mate\source\repos\Mate-Night\MatePost\Presentation Layer\bin\Debug\net8.0\PresentationLayer.deps.json
+C:\Users\Mate\source\repos\Mate-Night\MatePost\Presentation Layer\bin\Debug\net8.0\PresentationLayer.runtimeconfig.json
+C:\Users\Mate\source\repos\Mate-Night\MatePost\Presentation Layer\bin\Debug\net8.0\PresentationLayer.dll
+C:\Users\Mate\source\repos\Mate-Night\MatePost\Presentation Layer\bin\Debug\net8.0\PresentationLayer.pdb
+C:\Users\Mate\source\repos\Mate-Night\MatePost\Presentation Layer\bin\Debug\net8.0\BusinessLogicLayer.dll
+C:\Users\Mate\source\repos\Mate-Night\MatePost\Presentation Layer\bin\Debug\net8.0\PersistanceLayer.dll
+C:\Users\Mate\source\repos\Mate-Night\MatePost\Presentation Layer\bin\Debug\net8.0\BusinessLogicLayer.pdb
+C:\Users\Mate\source\repos\Mate-Night\MatePost\Presentation Layer\bin\Debug\net8.0\PersistanceLayer.pdb
+C:\Users\Mate\source\repos\Mate-Night\MatePost\Presentation Layer\obj\Debug\net8.0\PresentationLayer.csproj.AssemblyReference.cache
+C:\Users\Mate\source\repos\Mate-Night\MatePost\Presentation Layer\obj\Debug\net8.0\PresentationLayer.GeneratedMSBuildEditorConfig.editorconfig
+C:\Users\Mate\source\repos\Mate-Night\MatePost\Presentation Layer\obj\Debug\net8.0\PresentationLayer.AssemblyInfoInputs.cache
+C:\Users\Mate\source\repos\Mate-Night\MatePost\Presentation Layer\obj\Debug\net8.0\PresentationLayer.AssemblyInfo.cs
+C:\Users\Mate\source\repos\Mate-Night\MatePost\Presentation Layer\obj\Debug\net8.0\PresentationLayer.csproj.CoreCompileInputs.cache
+C:\Users\Mate\source\repos\Mate-Night\MatePost\Presentation Layer\obj\Debug\net8.0\PresentationLayer.sourcelink.json
+C:\Users\Mate\source\repos\Mate-Night\MatePost\Presentation Layer\obj\Debug\net8.0\Presenta.9C561136.Up2Date
+C:\Users\Mate\source\repos\Mate-Night\MatePost\Presentation Layer\obj\Debug\net8.0\PresentationLayer.dll
+C:\Users\Mate\source\repos\Mate-Night\MatePost\Presentation Layer\obj\Debug\net8.0\refint\PresentationLayer.dll
+C:\Users\Mate\source\repos\Mate-Night\MatePost\Presentation Layer\obj\Debug\net8.0\PresentationLayer.pdb
+C:\Users\Mate\source\repos\Mate-Night\MatePost\Presentation Layer\obj\Debug\net8.0\PresentationLayer.genruntimeconfig.cache
+C:\Users\Mate\source\repos\Mate-Night\MatePost\Presentation Layer\obj\Debug\net8.0\ref\PresentationLayer.dll
