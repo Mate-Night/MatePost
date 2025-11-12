@@ -7,8 +7,12 @@ using PersistenceLayer;
 
 namespace PresentationLayer
 {
+    /// <summary>
+    ///клас консольного додатку MatePost - система управління поштовими послугами
+    /// </summary>
     class Program
     {
+        // Сервіси для роботи з бізнес-логікою
         private static ClientService _clientService = null!;
         private static ParcelService _parcelService = null!;
         private static OperatorService _operatorService = null!;
@@ -17,6 +21,9 @@ namespace PresentationLayer
         private static StatisticsService _statisticsService = null!;
         private static JsonDataStore _dataStore = null!;
 
+        /// <summary>
+        /// Точка входу в програму
+        /// </summary>
         static void Main(string[] args)
         {
             Console.OutputEncoding = System.Text.Encoding.UTF8;
@@ -77,6 +84,9 @@ namespace PresentationLayer
             }
         }
 
+        /// <summary>
+        /// Ініціалізація всіх сервісів системи
+        /// </summary>
         static void InitializeServices()
         {
             _dataStore = new JsonDataStore();
@@ -88,14 +98,29 @@ namespace PresentationLayer
             _statisticsService = new StatisticsService(_parcelService, _operatorService);
         }
 
+        /// <summary>
+        /// Завантаження даних з файлів при старті програми
+        /// </summary>
         static void LoadData()
         {
-            _clientService.LoadClients(_dataStore.LoadClients());
-            _parcelService.LoadParcels(_dataStore.LoadParcels());
-            _operatorService.LoadOperators(_dataStore.LoadOperators());
-            _deliveryPointService.LoadDeliveryPoints(_dataStore.LoadDeliveryPoints());
+            try
+            {
+                _clientService.LoadClients(_dataStore.LoadClients());
+                _parcelService.LoadParcels(_dataStore.LoadParcels());
+                _operatorService.LoadOperators(_dataStore.LoadOperators());
+                _deliveryPointService.LoadDeliveryPoints(_dataStore.LoadDeliveryPoints());
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Помилка при завантаженні даних: {ex.Message}");
+                Console.WriteLine("Програма продовжить роботу з порожньою базою даних.");
+                Console.ReadKey();
+            }
         }
 
+        /// <summary>
+        /// Збереження всіх даних у файли
+        /// </summary>
         static void SaveData()
         {
             _dataStore.SaveClients(_clientService.GetAll());
@@ -104,6 +129,9 @@ namespace PresentationLayer
             _dataStore.SaveDeliveryPoints(_deliveryPointService.GetAll());
         }
 
+        /// <summary>
+        /// Меню управління клієнтами
+        /// </summary>
         static void ClientMenu()
         {
             Console.Clear();
@@ -134,6 +162,9 @@ namespace PresentationLayer
             }
         }
 
+        /// <summary>
+        /// Додавання нового клієнта
+        /// </summary>
         static void AddClient()
         {
             Console.Clear();
@@ -167,12 +198,15 @@ namespace PresentationLayer
             }
             else
             {
-                Console.WriteLine("\n✗ Помилка при додаванні клієнта!");
+                Console.WriteLine("\nПомилка при додаванні клієнта!");
             }
 
             Console.ReadKey();
         }
 
+        /// <summary>
+        /// Перегляд всіх клієнтів у системі
+        /// </summary>
         static void ViewAllClients()
         {
             Console.Clear();
@@ -193,6 +227,13 @@ namespace PresentationLayer
                     Console.WriteLine($"   Адреса: {client.Address}");
                     Console.WriteLine($"   Тип: {client.Type} | Статус: {client.Status}");
                     Console.WriteLine($"   Посилок: {client.TotalParcels} | Знижка: {client.GetDiscount() * 100}%");
+
+                    // Відображення інформації про безкоштовну доставку для Легенд
+                    if (client.IsLegend())
+                    {
+                        Console.WriteLine($"   Безкоштовна доставка: {(client.CanUseFreeDelivery() ? "Доступна" : "Використана цього року")}");
+                    }
+
                     Console.WriteLine();
                 }
             }
@@ -200,6 +241,9 @@ namespace PresentationLayer
             Console.ReadKey();
         }
 
+        /// <summary>
+        /// Пошук клієнтів за ПІБ, телефоном, email або адресою
+        /// </summary>
         static void SearchClient()
         {
             Console.Clear();
@@ -218,6 +262,9 @@ namespace PresentationLayer
             Console.ReadKey();
         }
 
+        /// <summary>
+        /// Видалення клієнта за ID
+        /// </summary>
         static void DeleteClient()
         {
             Console.Clear();
@@ -230,16 +277,20 @@ namespace PresentationLayer
             Console.ReadKey();
         }
 
+        /// <summary>
+        /// Меню управління посилками
+        /// </summary>
         static void ParcelMenu()
         {
             Console.Clear();
             Console.WriteLine("=== УПРАВЛІННЯ ПОСИЛКАМИ ===");
             Console.WriteLine("1. Створити посилку");
             Console.WriteLine("2. Переглянути всі посилки");
-            Console.WriteLine("3. Знайти посилку за трекінг-номером");
-            Console.WriteLine("4. Змінити статус посилки");
-            Console.WriteLine("5. Розрахувати вартість доставки");
-            Console.WriteLine("6. Симулювати затримку");
+            Console.WriteLine("3. Розширений пошук посилок");
+            Console.WriteLine("4. Відстежити посилку за трекінг-номером");
+            Console.WriteLine("5. Змінити статус посилки");
+            Console.WriteLine("6. Розрахувати вартість доставки");
+            Console.WriteLine("7. Симулювати затримку");
             Console.WriteLine("0. Назад");
             Console.Write("\nОберіть опцію: ");
 
@@ -254,20 +305,26 @@ namespace PresentationLayer
                     ViewAllParcels();
                     break;
                 case "3":
-                    TrackParcel();
+                    AdvancedSearchParcels();
                     break;
                 case "4":
-                    ChangeParcelStatus();
+                    TrackParcel();
                     break;
                 case "5":
-                    CalculateDeliveryCost();
+                    ChangeParcelStatus();
                     break;
                 case "6":
+                    CalculateDeliveryCost();
+                    break;
+                case "7":
                     SimulateDelay();
                     break;
             }
         }
 
+        /// <summary>
+        /// Створення нової посилки з усіма необхідними параметрами
+        /// </summary>
         static void CreateParcel()
         {
             Console.Clear();
@@ -275,6 +332,14 @@ namespace PresentationLayer
 
             Console.Write("ID відправника: ");
             if (!int.TryParse(Console.ReadLine(), out int senderId)) return;
+
+            var sender = _clientService.GetById(senderId);
+            if (sender == null)
+            {
+                Console.WriteLine("Відправника не знайдено!");
+                Console.ReadKey();
+                return;
+            }
 
             Console.Write("ID одержувача: ");
             if (!int.TryParse(Console.ReadLine(), out int receiverId)) return;
@@ -288,6 +353,7 @@ namespace PresentationLayer
             Console.WriteLine("1. Документ");
             Console.WriteLine("2. Посилка");
             Console.WriteLine("3. Крихке");
+            Console.Write("Оберіть: ");
             ContentType contentType = Console.ReadLine() switch
             {
                 "3" => ContentType.Fragile,
@@ -305,6 +371,7 @@ namespace PresentationLayer
             Console.WriteLine("1. Укрпошта");
             Console.WriteLine("2. Нова Пошта");
             Console.WriteLine("3. Meest Express");
+            Console.Write("Оберіть: ");
             CourierService service = Console.ReadLine() switch
             {
                 "2" => CourierService.NovaPoshta,
@@ -317,6 +384,7 @@ namespace PresentationLayer
             Console.WriteLine("2. Поштомат");
             Console.WriteLine("3. Адресна доставка");
             Console.WriteLine("4. Таксі");
+            Console.Write("Оберіть: ");
             DeliveryType deliveryType = Console.ReadLine() switch
             {
                 "2" => DeliveryType.Parcelbox,
@@ -329,7 +397,7 @@ namespace PresentationLayer
             if (type == ParcelType.International)
             {
                 Console.Write("\nКраїна одержувача: ");
-                receiverCountry = Console.ReadLine();
+                receiverCountry = Console.ReadLine() ?? "Ukraine";
             }
 
             Console.Write("\nСтрахувати посилку? (y/n): ");
@@ -342,8 +410,32 @@ namespace PresentationLayer
                 decimal.TryParse(Console.ReadLine(), out insuranceValue);
             }
 
+            // Перевірка чи є вміст небезпечним
+            Console.Write("\nЧи містить посилка небезпечні матеріали? (y/n): ");
+            bool isDangerous = Console.ReadLine()?.ToLower() == "y";
+
+            if (isDangerous && type == ParcelType.International)
+            {
+                Console.WriteLine("\nМіжнародне відправлення небезпечних вантажів заборонено!");
+                Console.ReadKey();
+                return;
+            }
+
+            // Пропозиція безкоштовної доставки для Легенд
+            bool useFreeDelivery = false;
+            if (sender.IsLegend() && sender.CanUseFreeDelivery())
+            {
+                Console.WriteLine("\nВи - Легенда Доставки!");
+                Console.Write("Бажаєте використати безкоштовну доставку (1 раз на рік)? (y/n): ");
+                if (Console.ReadLine()?.ToLower() == "y")
+                {
+                    useFreeDelivery = true;
+                    sender.UseFreeDelivery();
+                }
+            }
+
             var result = _parcelService.Create(senderId, receiverId, type, contentType,
-                weight, declaredValue, service, deliveryType, receiverCountry, isInsured, insuranceValue);
+                weight, declaredValue, service, deliveryType, receiverCountry, isInsured, insuranceValue, useFreeDelivery);
 
             if (result.Success)
             {
@@ -352,6 +444,16 @@ namespace PresentationLayer
                 Console.WriteLine($"Трекінг-номер: {parcel.TrackingNumber}");
                 Console.WriteLine($"Орієнтовний термін доставки: {parcel.EstimatedDeliveryDays} днів");
 
+                if (parcel.IsPriorityProcessing)
+                {
+                    Console.WriteLine("Пріоритетна обробка активована (Легенда)");
+                }
+
+                if (parcel.IsFreeDelivery)
+                {
+                    Console.WriteLine("Безкоштовна доставка застосована!");
+                }
+
                 if (parcel.RequiresOperatorConfirmation())
                 {
                     Console.WriteLine("Увага! Посилка потребує підтвердження оператора (вартість > 5000 грн)");
@@ -359,12 +461,15 @@ namespace PresentationLayer
             }
             else
             {
-                Console.WriteLine("\n✗ Помилка при створенні посилки!");
+                Console.WriteLine($"\nПомилка: {result.Data}");
             }
 
             Console.ReadKey();
         }
 
+        /// <summary>
+        /// Перегляд всіх посилок у системі
+        /// </summary>
         static void ViewAllParcels()
         {
             Console.Clear();
@@ -391,6 +496,12 @@ namespace PresentationLayer
                     Console.WriteLine($"   Вартість: {parcel.DeclaredValue} грн");
                     Console.WriteLine($"   Служба: {parcel.Service} | Доставка: {parcel.DeliveryType}");
                     Console.WriteLine($"   Створено: {parcel.CreatedAt:dd.MM.yyyy HH:mm}");
+
+                    if (parcel.IsPriorityProcessing)
+                        Console.WriteLine("Пріоритетна обробка");
+                    if (parcel.IsFreeDelivery)
+                        Console.WriteLine("Безкоштовна доставка");
+
                     Console.WriteLine();
                 }
             }
@@ -398,6 +509,89 @@ namespace PresentationLayer
             Console.ReadKey();
         }
 
+        /// <summary>
+        /// Розширений пошук посилок за різними критеріями
+        /// </summary>
+        static void AdvancedSearchParcels()
+        {
+            Console.Clear();
+            Console.WriteLine("=== РОЗШИРЕНИЙ ПОШУК ПОСИЛОК ===");
+            Console.WriteLine("1. Пошук за трекінг-номером");
+            Console.WriteLine("2. Пошук за клієнтом (ПІБ/телефон)");
+            Console.WriteLine("3. Пошук за статусом");
+            Console.WriteLine("4. Пошук за датою створення");
+            Console.Write("\nОберіть спосіб пошуку: ");
+
+            string choice = Console.ReadLine() ?? "";
+            List<Parcel> results = new List<Parcel>();
+
+            switch (choice)
+            {
+                case "1":
+                    Console.Write("Введіть трекінг-номер: ");
+                    string tracking = Console.ReadLine() ?? "";
+                    results = _parcelService.Search(query: tracking);
+                    break;
+
+                case "2":
+                    Console.Write("Введіть ПІБ або телефон клієнта: ");
+                    string clientQuery = Console.ReadLine() ?? "";
+                    results = _parcelService.Search(query: clientQuery);
+                    break;
+
+                case "3":
+                    Console.WriteLine("\nОберіть статус:");
+                    Console.WriteLine("1. Очікує відправки");
+                    Console.WriteLine("2. Прийнято оператором");
+                    Console.WriteLine("3. В дорозі");
+                    Console.WriteLine("4. На складі");
+                    Console.WriteLine("5. Доставлено");
+                    Console.WriteLine("6. Втрачено");
+                    Console.Write("Оберіть: ");
+
+                    ParcelStatus? status = Console.ReadLine() switch
+                    {
+                        "1" => ParcelStatus.AwaitingShipment,
+                        "2" => ParcelStatus.AcceptedByOperator,
+                        "3" => ParcelStatus.InTransit,
+                        "4" => ParcelStatus.AtWarehouse,
+                        "5" => ParcelStatus.Delivered,
+                        "6" => ParcelStatus.Lost,
+                        _ => null
+                    };
+
+                    if (status.HasValue)
+                        results = _parcelService.Search(status: status.Value);
+                    break;
+
+                case "4":
+                    Console.Write("Введіть дату (dd.MM.yyyy): ");
+                    if (DateTime.TryParse(Console.ReadLine(), out DateTime searchDate))
+                    {
+                        results = _parcelService.Search(date: searchDate);
+                    }
+                    break;
+            }
+
+            Console.WriteLine($"\n=== РЕЗУЛЬТАТИ ПОШУКУ ({results.Count}) ===\n");
+
+            foreach (var parcel in results)
+            {
+                var sender = _clientService.GetById(parcel.SenderId);
+                var receiver = _clientService.GetById(parcel.ReceiverId);
+
+                Console.WriteLine($"Трекінг: {parcel.TrackingNumber} | Статус: {parcel.CurrentStatus}");
+                Console.WriteLine($"   {sender?.FullName} → {receiver?.FullName}");
+                Console.WriteLine($"   Дата: {parcel.CreatedAt:dd.MM.yyyy HH:mm}");
+                Console.WriteLine();
+            }
+
+            Console.ReadKey();
+        }
+
+        /// <summary>
+        /// Відстеження посилки за трекінг-номером з повною історією
+        /// </summary>
         static void TrackParcel()
         {
             Console.Clear();
@@ -441,12 +635,24 @@ namespace PresentationLayer
             Console.ReadKey();
         }
 
+        /// <summary>
+        /// Зміна статусу посилки з обов'язковим підтвердженням оператора для дорогих посилок
+        /// </summary>
         static void ChangeParcelStatus()
         {
             Console.Clear();
             Console.Write("Трекінг-номер посилки: ");
             string trackingNumber = Console.ReadLine() ?? "";
 
+            var parcel = _parcelService.GetByTrackingNumber(trackingNumber);
+            if (parcel == null)
+            {
+                Console.WriteLine("Посилку не знайдено!");
+                Console.ReadKey();
+                return;
+            }
+
+            Console.WriteLine($"\nПоточний статус: {parcel.CurrentStatus}");
             Console.WriteLine("\nОберіть новий статус:");
             Console.WriteLine("1. Очікує відправки");
             Console.WriteLine("2. Прийнято оператором");
@@ -454,6 +660,7 @@ namespace PresentationLayer
             Console.WriteLine("4. На складі");
             Console.WriteLine("5. Доставлено");
             Console.WriteLine("6. Втрачено");
+            Console.Write("Оберіть: ");
 
             ParcelStatus newStatus = Console.ReadLine() switch
             {
@@ -469,27 +676,44 @@ namespace PresentationLayer
             string note = Console.ReadLine();
 
             int? operatorId = null;
-            if (newStatus == ParcelStatus.AcceptedByOperator)
+            if (newStatus == ParcelStatus.AcceptedByOperator && parcel.RequiresOperatorConfirmation())
             {
+                Console.WriteLine("\nЦя посилка потребує підтвердження оператора (вартість > 5000 грн)");
                 Console.Write("ID оператора: ");
                 if (int.TryParse(Console.ReadLine(), out int opId))
-                    operatorId = opId;
+                {
+                    var op = _operatorService.GetById(opId);
+                    if (op != null)
+                    {
+                        operatorId = opId;
+                        op.IncrementProcessed();
+                    }
+                    else
+                    {
+                        Console.WriteLine("Оператора не знайдено!");
+                        Console.ReadKey();
+                        return;
+                    }
+                }
             }
 
             var result = _parcelService.ChangeStatus(trackingNumber, newStatus, note, operatorId);
 
             if (result.Success)
             {
-                Console.WriteLine("Статус оновлено!");
+                Console.WriteLine("\nСтатус оновлено!");
             }
             else
             {
-                Console.WriteLine($"✗ Помилка: {result.Data}");
+                Console.WriteLine($"\nПомилка: {result.Data}");
             }
 
             Console.ReadKey();
         }
 
+        /// <summary>
+        /// Розрахунок вартості доставки з можливістю застосування знижки
+        /// </summary>
         static void CalculateDeliveryCost()
         {
             Console.Clear();
@@ -506,6 +730,16 @@ namespace PresentationLayer
 
             var sender = _clientService.GetById(parcel.SenderId);
 
+            // Якщо безкоштовна доставка - одразу показуємо 0
+            if (parcel.IsFreeDelivery)
+            {
+                Console.WriteLine($"\n=== РОЗРАХУНОК ВАРТОСТІ ===");
+                Console.WriteLine("Безкоштовна доставка застосована!");
+                Console.WriteLine("Вартість: 0 грн");
+                Console.ReadKey();
+                return;
+            }
+
             decimal deliveryCost = _calculationService.CalculateDeliveryCost(parcel);
             decimal tax = _calculationService.CalculateImportTax(parcel);
             decimal totalWithoutDiscount = deliveryCost + tax;
@@ -516,28 +750,56 @@ namespace PresentationLayer
                 Console.WriteLine($"Податок (>150 EUR): {tax} грн");
             Console.WriteLine($"Разом: {totalWithoutDiscount} грн");
 
-            Console.WriteLine($"\nСтатус клієнта: {sender.Status}");
+            Console.WriteLine($"\n--- ІНФОРМАЦІЯ ПРО КЛІЄНТА ---");
+            Console.WriteLine($"Статус: {sender.Status}");
             Console.WriteLine($"Доступна знижка: {sender.GetDiscount() * 100}%");
-            Console.WriteLine($"Можна використати знижку: {(sender.CanUseDiscount() ? "Так" : "Ні")}");
 
-            Console.Write("\nВикористати знижку? (y/n): ");
-            bool useDiscount = Console.ReadLine()?.ToLower() == "y";
+            // Перевірка святкового періоду для Легенд
+            if (sender.IsLegend() && IsHolidayPeriod())
+            {
+                Console.WriteLine("Святковий період - знижка 35% для Легенди!");
+            }
+
+            Console.WriteLine($"Можна використати знижку: {(sender.CanUseDiscount() ? "Так" : "Ні (вже використана цього місяця)")}");
+
+            bool useDiscount = false;
+            if (sender.CanUseDiscount())
+            {
+                Console.Write("\nВикористати знижку? (y/n): ");
+                useDiscount = Console.ReadLine()?.ToLower() == "y";
+            }
 
             decimal finalPrice = _calculationService.CalculateFinalPrice(parcel, sender, useDiscount);
 
             if (useDiscount && sender.CanUseDiscount())
             {
-                Console.WriteLine($"\n💰 Вартість зі знижкою: {finalPrice} грн");
+                sender.UseDiscount();
+
+                Console.WriteLine($"\nВартість зі знижкою: {finalPrice} грн");
                 Console.WriteLine($"Заощаджено: {totalWithoutDiscount - finalPrice} грн");
+                Console.WriteLine("Знижка застосована!");
             }
             else
             {
-                Console.WriteLine($"\n💰 Кінцева вартість: {finalPrice} грн");
+                Console.WriteLine($"\nКінцева вартість: {finalPrice} грн");
             }
 
             Console.ReadKey();
         }
 
+        /// <summary>
+        /// Перевірка чи зараз святковий період 
+        /// </summary>
+        static bool IsHolidayPeriod()
+        {
+            var today = DateTime.Now;
+            return (today.Month == 12 && today.Day >= 20) ||
+                   (today.Month == 1 && today.Day <= 7);
+        }
+
+        /// <summary>
+        /// Симуляція випадкової затримки доставки (5% ймовірність)
+        /// </summary>
         static void SimulateDelay()
         {
             Console.Clear();
@@ -548,7 +810,8 @@ namespace PresentationLayer
 
             if (result.Success)
             {
-                dynamic data = result.Data;
+                var data = ((bool HasDelay, DelayReason? Reason, int? DelayDays, int? NewEstimate))result.Data;
+
                 if (data.HasDelay)
                 {
                     Console.WriteLine($"\nВиникла затримка!");
@@ -563,12 +826,15 @@ namespace PresentationLayer
             }
             else
             {
-                Console.WriteLine("\n✗ Посилку не знайдено!");
+                Console.WriteLine($"\n {result.Data}");
             }
 
             Console.ReadKey();
         }
 
+        /// <summary>
+        /// Меню управління операторами
+        /// </summary>
         static void OperatorMenu()
         {
             Console.Clear();
@@ -605,6 +871,9 @@ namespace PresentationLayer
             }
         }
 
+        /// <summary>
+        /// Перегляд всіх операторів з їх статистикою
+        /// </summary>
         static void ViewAllOperators()
         {
             Console.Clear();
@@ -630,6 +899,9 @@ namespace PresentationLayer
             Console.ReadKey();
         }
 
+        /// <summary>
+        /// Меню управління точками доставки
+        /// </summary>
         static void DeliveryPointMenu()
         {
             Console.Clear();
@@ -662,6 +934,9 @@ namespace PresentationLayer
             }
         }
 
+        /// <summary>
+        /// Додавання нової точки доставки
+        /// </summary>
         static void AddDeliveryPoint()
         {
             Console.Clear();
@@ -672,6 +947,7 @@ namespace PresentationLayer
             Console.WriteLine("2. Поштомат");
             Console.WriteLine("3. Адресна доставка");
             Console.WriteLine("4. Таксі");
+            Console.Write("Оберіть: ");
 
             DeliveryType type = Console.ReadLine() switch
             {
@@ -691,12 +967,15 @@ namespace PresentationLayer
             string orgName = Console.ReadLine();
 
             var result = _deliveryPointService.Add(type, address, postalCode,
-                string.IsNullOrEmpty(orgName) ? null : orgName);
+            string.IsNullOrEmpty(orgName) ? null : orgName);
 
             Console.WriteLine(result.Success ? "\nТочку доставки додано!" : "\nПомилка!");
             Console.ReadKey();
         }
 
+        /// <summary>
+        /// Перегляд всіх точок доставки
+        /// </summary>
         static void ViewAllDeliveryPoints()
         {
             Console.Clear();
@@ -724,6 +1003,9 @@ namespace PresentationLayer
             Console.ReadKey();
         }
 
+        /// <summary>
+        /// Відображення статистики системи з популярними напрямками
+        /// </summary>
         static void ShowStatistics()
         {
             Console.Clear();
@@ -731,6 +1013,7 @@ namespace PresentationLayer
 
             var stats = _statisticsService.GetStatistics();
 
+            Console.WriteLine("--- ЗАГАЛЬНА ІНФОРМАЦІЯ ---");
             Console.WriteLine($"Всього посилок: {stats["TotalParcels"]}");
             Console.WriteLine($"Доставлено: {stats["Delivered"]}");
             Console.WriteLine($"Втрачено: {stats["Lost"]}");
@@ -745,11 +1028,24 @@ namespace PresentationLayer
             if (stats.ContainsKey("AvgInternationalDelivery"))
                 Console.WriteLine($"Середній час міжнародної доставки: {stats["AvgInternationalDelivery"]:F1} днів");
 
-            Console.WriteLine("\n--- ТОП-3 операторів ---");
+            Console.WriteLine("\n--- ТОП-3 ОПЕРАТОРІВ ---");
             var topOps = (List<Operator>)stats["TopOperators"];
             foreach (var op in topOps)
             {
                 Console.WriteLine($"{op.Name}: {op.ProcessedParcels} посилок");
+            }
+
+            // Відображення популярних напрямків
+            if (stats.ContainsKey("PopularDestinations"))
+            {
+                Console.WriteLine("\n--- ПОПУЛЯРНІ НАПРЯМКИ ДОСТАВКИ ---");
+                var destinations = (List<KeyValuePair<string, int>>)stats["PopularDestinations"];
+                int position = 1;
+                foreach (var dest in destinations.Take(5))
+                {
+                    Console.WriteLine($"{position}. {dest.Key}: {dest.Value} посилок");
+                    position++;
+                }
             }
 
             Console.ReadKey();
