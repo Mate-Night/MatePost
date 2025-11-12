@@ -15,39 +15,39 @@ namespace BusinessLogicLayer.Services
         {
             try
             {
-                // Перевірка, чи посилка не null
                 if (parcel == null)
                     throw new ArgumentNullException(nameof(parcel));
 
-                // Базова вартість залежить від типу доставки (місцева/міжнародна)
-                decimal baseCost = parcel.Type == ParcelType.Local ? 50m : 200m;
+                // Базова вартість залежить від типу доставки
+                decimal baseCost = parcel.Type == ParcelType.Local
+                    ? DeliveryConfiguration.LocalBaseCost
+                    : DeliveryConfiguration.InternationalBaseCost;
 
-                // Додавання вартості за вагу (10 грн за кг)
-                baseCost += (decimal)(parcel.Weight * 10);
+                // Додавання вартості за вагу
+                baseCost += (decimal)parcel.Weight * DeliveryConfiguration.PricePerKg;
 
                 // Додавання вартості залежно від способу доставки
                 baseCost += parcel.DeliveryType switch
                 {
-                    DeliveryType.Office => 0m,// У відділення - безкоштовно
-                    DeliveryType.Parcelbox => 20m,// У поштомат - 20 грн
-                    DeliveryType.Address => 50m,// За адресою - 50 грн
-                    DeliveryType.Taxi => 150m,// Таксі - 150 грн
+                    DeliveryType.Office => DeliveryConfiguration.OfficeDeliveryCost,
+                    DeliveryType.Parcelbox => DeliveryConfiguration.ParcelboxDeliveryCost,
+                    DeliveryType.Address => DeliveryConfiguration.AddressDeliveryCost,
+                    DeliveryType.Taxi => DeliveryConfiguration.TaxiDeliveryCost,
                     _ => 0m
                 };
 
                 // Додаткова плата за крихкий вміст
                 if (parcel.ContentType == ContentType.Fragile)
-                    baseCost += 30m;
+                    baseCost += DeliveryConfiguration.FragileSurcharge;
 
-                // Вартість страхування (2% від оціночної вартості)
+                // Вартість страхування
                 if (parcel.IsInsured)
-                    baseCost += parcel.InsuranceValue * 0.02m;
+                    baseCost += parcel.InsuranceValue * DeliveryConfiguration.InsuranceRate;
 
                 return baseCost;
             }
             catch (Exception)
             {
-                // У разі помилки повертаємо 0
                 return 0m;
             }
         }
@@ -59,27 +59,20 @@ namespace BusinessLogicLayer.Services
         {
             try
             {
-                // Мито застосовується тільки для міжнародних посилок
                 if (parcel == null || parcel.Type != ParcelType.International)
                     return 0m;
 
-                // Поріг безмитного ввезення - 150 євро
-                const decimal euroThreshold = 150m;
-                // Курс євро до гривні
-                const decimal eurRate = 41m;
-
                 // Конвертація оціночної вартості в євро
-                decimal valueInEuro = parcel.DeclaredValue / eurRate;
+                decimal valueInEuro = parcel.DeclaredValue / DeliveryConfiguration.EuroToUahRate;
 
-                // Якщо вартість перевищує поріг, нараховується 10% мито
-                if (valueInEuro > euroThreshold)
-                    return parcel.DeclaredValue * 0.10m;
+                // Якщо вартість перевищує поріг, нараховується мито
+                if (valueInEuro > DeliveryConfiguration.CustomsThresholdEuro)
+                    return parcel.DeclaredValue * DeliveryConfiguration.CustomsTaxRate;
 
                 return 0m;
             }
             catch (Exception)
             {
-                // У разі помилки повертаємо 0
                 return 0m;
             }
         }
@@ -91,36 +84,33 @@ namespace BusinessLogicLayer.Services
         {
             try
             {
-                // Перевірка умов для застосування знижки
                 if (client == null || !useDiscount || !client.CanUseDiscount())
                     return amount;
 
-                // Отримання базової знижки клієнта
                 decimal discount = client.GetDiscount();
 
                 // Спеціальна знижка для легендарних клієнтів у святковий період
                 if (client.IsLegend() && IsHolidayPeriod())
-                    discount = 0.35m;
+                    discount = DeliveryConfiguration.LegendHolidayDiscount;
 
-                // Повернення суми зі знижкою
                 return amount * (1 - discount);
             }
             catch (Exception)
             {
-                // У разі помилки повертаємо початкову суму
                 return amount;
             }
         }
 
         /// <summary>
-        /// Перевіряє, чи зараз святковий період 
+        /// Перевіряє, чи зараз святковий період
         /// </summary>
         private bool IsHolidayPeriod()
         {
             var today = DateTime.Now;
-            // Святковий період: 20 грудня - 7 січня
-            return (today.Month == 12 && today.Day >= 20) ||
-                   (today.Month == 1 && today.Day <= 7);
+            return (today.Month == DeliveryConfiguration.HolidayStartMonth &&
+                    today.Day >= DeliveryConfiguration.HolidayStartDay) ||
+                   (today.Month == DeliveryConfiguration.HolidayEndMonth &&
+                    today.Day <= DeliveryConfiguration.HolidayEndDay);
         }
 
         /// <summary>
@@ -130,29 +120,20 @@ namespace BusinessLogicLayer.Services
         {
             try
             {
-                // Перевірка вхідних параметрів
                 if (parcel == null || sender == null)
                     return 0m;
 
-                // Якщо доставка безкоштовна, повертаємо 0
                 if (parcel.IsFreeDelivery)
                     return 0m;
 
-                // Розрахунок базової вартості доставки
                 decimal cost = CalculateDeliveryCost(parcel);
-
-                // Розрахунок імпортного мита
                 decimal tax = CalculateImportTax(parcel);
-
-                // Загальна сума
                 decimal total = cost + tax;
 
-                // Застосування знижки та повернення фінальної ціни
                 return ApplyDiscount(total, sender, useDiscount);
             }
             catch (Exception)
             {
-                // У разі помилки повертаємо 0
                 return 0m;
             }
         }

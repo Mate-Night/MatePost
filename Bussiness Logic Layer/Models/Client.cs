@@ -29,9 +29,6 @@ namespace BusinessLogicLayer.Models
         /// <summary>Статус лояльності</summary>
         public LoyaltyStatus Status { get; set; }
 
-        /// <summary>Загальна кількість відправлених посилок</summary>
-        public int TotalParcels { get; set; }
-
         /// <summary>Дата останнього використання знижки</summary>
         public DateTime? LastDiscountUsed { get; set; }
 
@@ -54,7 +51,6 @@ namespace BusinessLogicLayer.Models
             Address = address;
             Type = type;
             Status = LoyaltyStatus.Beginner;
-            TotalParcels = 0;
         }
 
         /// <summary>
@@ -64,10 +60,10 @@ namespace BusinessLogicLayer.Models
         {
             return Status switch
             {
-                LoyaltyStatus.Beginner => 0.05m,// 5%
-                LoyaltyStatus.Active => 0.10m, // 10%
-                LoyaltyStatus.Pro => 0.15m,// 15%
-                LoyaltyStatus.Legend => 0.20m,// 20%
+                LoyaltyStatus.Beginner => DeliveryConfiguration.BeginnerDiscount,
+                LoyaltyStatus.Active => DeliveryConfiguration.ActiveDiscount,
+                LoyaltyStatus.Pro => DeliveryConfiguration.ProDiscount,
+                LoyaltyStatus.Legend => DeliveryConfiguration.LegendDiscount,
                 _ => 0m
             };
         }
@@ -97,7 +93,6 @@ namespace BusinessLogicLayer.Models
             if (!IsLegend()) return false;
             if (!LastFreeDelivery.HasValue) return true;
 
-            // Перевіряємо чи минув рік з моменту останнього використання
             return (DateTime.Now - LastFreeDelivery.Value).TotalDays >= 365;
         }
 
@@ -110,25 +105,16 @@ namespace BusinessLogicLayer.Models
         }
 
         /// <summary>
-        /// Збільшує лічильник посилок та оновлює статус лояльності
-        /// </summary>
-        public void IncrementParcels()
-        {
-            TotalParcels++;
-            UpdateLoyaltyStatus();
-        }
-
-        /// <summary>
         /// Оновлює статус лояльності на основі кількості відправлених посилок
         /// </summary>
-        public void UpdateLoyaltyStatus()
+        public void UpdateLoyaltyStatus(int parcelCount)
         {
-            Status = TotalParcels switch
+            Status = parcelCount switch
             {
-                >= 200 => LoyaltyStatus.Legend,// 200+ посилок
-                >= 51 => LoyaltyStatus.Pro,// 51-200 посилок
-                >= 11 => LoyaltyStatus.Active, // 11-50 посилок
-                _ => LoyaltyStatus.Beginner // 0-10 посилок
+                >= DeliveryConfiguration.LegendStatusThreshold => LoyaltyStatus.Legend,
+                >= DeliveryConfiguration.ProStatusThreshold => LoyaltyStatus.Pro,
+                >= DeliveryConfiguration.ActiveStatusThreshold => LoyaltyStatus.Active,
+                _ => LoyaltyStatus.Beginner
             };
         }
 

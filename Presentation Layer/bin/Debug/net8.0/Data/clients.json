@@ -1,0 +1,38 @@
+[
+  {
+    "Id": 2,
+    "FullName": "Петренко Іван",
+    "Phone": "0967920906",
+    "Email": "ainoly@gmail.com",
+    "Address": "spaska",
+    "Type": 0,
+    "Status": 0,
+    "TotalParcels": 0,
+    "LastDiscountUsed": null,
+    "LastFreeDelivery": null
+  },
+  {
+    "Id": 3,
+    "FullName": "Oleksiy",
+    "Phone": "9755323452",
+    "Email": "opa@gmail.com",
+    "Address": "spicy",
+    "Type": 0,
+    "Status": 0,
+    "TotalParcels": 0,
+    "LastDiscountUsed": null,
+    "LastFreeDelivery": null
+  },
+  {
+    "Id": 4,
+    "FullName": "Назар Тестер",
+    "Phone": "0975532356",
+    "Email": "ainol11@gmail.com",
+    "Address": "95 Kvartal",
+    "Type": 0,
+    "Status": 0,
+    "TotalParcels": 0,
+    "LastDiscountUsed": null,
+    "LastFreeDelivery": null
+  }
+]

@@ -8,11 +8,10 @@ using PersistenceLayer;
 namespace PresentationLayer
 {
     /// <summary>
-    ///клас консольного додатку MatePost - система управління поштовими послугами
+    /// Головний клас консольного додатку MatePost - система управління поштовими послугами
     /// </summary>
     class Program
     {
-        // Сервіси для роботи з бізнес-логікою
         private static ClientService _clientService = null!;
         private static ParcelService _parcelService = null!;
         private static OperatorService _operatorService = null!;
@@ -21,9 +20,6 @@ namespace PresentationLayer
         private static StatisticsService _statisticsService = null!;
         private static JsonDataStore _dataStore = null!;
 
-        /// <summary>
-        /// Точка входу в програму
-        /// </summary>
         static void Main(string[] args)
         {
             Console.OutputEncoding = System.Text.Encoding.UTF8;
@@ -84,9 +80,6 @@ namespace PresentationLayer
             }
         }
 
-        /// <summary>
-        /// Ініціалізація всіх сервісів системи
-        /// </summary>
         static void InitializeServices()
         {
             _dataStore = new JsonDataStore();
@@ -98,9 +91,6 @@ namespace PresentationLayer
             _statisticsService = new StatisticsService(_parcelService, _operatorService);
         }
 
-        /// <summary>
-        /// Завантаження даних з файлів при старті програми
-        /// </summary>
         static void LoadData()
         {
             try
@@ -118,9 +108,6 @@ namespace PresentationLayer
             }
         }
 
-        /// <summary>
-        /// Збереження всіх даних у файли
-        /// </summary>
         static void SaveData()
         {
             _dataStore.SaveClients(_clientService.GetAll());
@@ -129,9 +116,6 @@ namespace PresentationLayer
             _dataStore.SaveDeliveryPoints(_deliveryPointService.GetAll());
         }
 
-        /// <summary>
-        /// Меню управління клієнтами
-        /// </summary>
         static void ClientMenu()
         {
             Console.Clear();
@@ -162,9 +146,6 @@ namespace PresentationLayer
             }
         }
 
-        /// <summary>
-        /// Додавання нового клієнта
-        /// </summary>
         static void AddClient()
         {
             Console.Clear();
@@ -204,9 +185,6 @@ namespace PresentationLayer
             Console.ReadKey();
         }
 
-        /// <summary>
-        /// Перегляд всіх клієнтів у системі
-        /// </summary>
         static void ViewAllClients()
         {
             Console.Clear();
@@ -222,13 +200,15 @@ namespace PresentationLayer
             {
                 foreach (var client in clients)
                 {
+                    // Динамічно отримуємо кількість посилок
+                    int parcelCount = _clientService.GetClientParcelCount(client.Id);
+
                     Console.WriteLine($"ID: {client.Id} | {client.FullName}");
                     Console.WriteLine($"   Телефон: {client.Phone} | Email: {client.Email}");
                     Console.WriteLine($"   Адреса: {client.Address}");
                     Console.WriteLine($"   Тип: {client.Type} | Статус: {client.Status}");
-                    Console.WriteLine($"   Посилок: {client.TotalParcels} | Знижка: {client.GetDiscount() * 100}%");
+                    Console.WriteLine($"   Посилок: {parcelCount} | Знижка: {client.GetDiscount() * 100}%");
 
-                    // Відображення інформації про безкоштовну доставку для Легенд
                     if (client.IsLegend())
                     {
                         Console.WriteLine($"   Безкоштовна доставка: {(client.CanUseFreeDelivery() ? "Доступна" : "Використана цього року")}");
@@ -241,9 +221,6 @@ namespace PresentationLayer
             Console.ReadKey();
         }
 
-        /// <summary>
-        /// Пошук клієнтів за ПІБ, телефоном, email або адресою
-        /// </summary>
         static void SearchClient()
         {
             Console.Clear();
@@ -262,9 +239,6 @@ namespace PresentationLayer
             Console.ReadKey();
         }
 
-        /// <summary>
-        /// Видалення клієнта за ID
-        /// </summary>
         static void DeleteClient()
         {
             Console.Clear();
@@ -277,9 +251,6 @@ namespace PresentationLayer
             Console.ReadKey();
         }
 
-        /// <summary>
-        /// Меню управління посилками
-        /// </summary>
         static void ParcelMenu()
         {
             Console.Clear();
@@ -322,9 +293,6 @@ namespace PresentationLayer
             }
         }
 
-        /// <summary>
-        /// Створення нової посилки з усіма необхідними параметрами
-        /// </summary>
         static void CreateParcel()
         {
             Console.Clear();
@@ -410,7 +378,6 @@ namespace PresentationLayer
                 decimal.TryParse(Console.ReadLine(), out insuranceValue);
             }
 
-            // Перевірка чи є вміст небезпечним
             Console.Write("\nЧи містить посилка небезпечні матеріали? (y/n): ");
             bool isDangerous = Console.ReadLine()?.ToLower() == "y";
 
@@ -421,7 +388,6 @@ namespace PresentationLayer
                 return;
             }
 
-            // Пропозиція безкоштовної доставки для Легенд
             bool useFreeDelivery = false;
             if (sender.IsLegend() && sender.CanUseFreeDelivery())
             {
@@ -467,9 +433,6 @@ namespace PresentationLayer
             Console.ReadKey();
         }
 
-        /// <summary>
-        /// Перегляд всіх посилок у системі
-        /// </summary>
         static void ViewAllParcels()
         {
             Console.Clear();
@@ -498,9 +461,9 @@ namespace PresentationLayer
                     Console.WriteLine($"   Створено: {parcel.CreatedAt:dd.MM.yyyy HH:mm}");
 
                     if (parcel.IsPriorityProcessing)
-                        Console.WriteLine("Пріоритетна обробка");
+                        Console.WriteLine("   Пріоритетна обробка");
                     if (parcel.IsFreeDelivery)
-                        Console.WriteLine("Безкоштовна доставка");
+                        Console.WriteLine("   Безкоштовна доставка");
 
                     Console.WriteLine();
                 }
@@ -509,9 +472,6 @@ namespace PresentationLayer
             Console.ReadKey();
         }
 
-        /// <summary>
-        /// Розширений пошук посилок за різними критеріями
-        /// </summary>
         static void AdvancedSearchParcels()
         {
             Console.Clear();
@@ -589,9 +549,6 @@ namespace PresentationLayer
             Console.ReadKey();
         }
 
-        /// <summary>
-        /// Відстеження посилки за трекінг-номером з повною історією
-        /// </summary>
         static void TrackParcel()
         {
             Console.Clear();
@@ -626,7 +583,7 @@ namespace PresentationLayer
                         Console.WriteLine($"{notif.Timestamp:dd.MM.yyyy HH:mm} - {notif.Status}");
                         if (notif.DelayReason.HasValue)
                         {
-                            Console.WriteLine($"Затримка: {notif.DelayReason} (+{notif.DelayDays} днів)");
+                            Console.WriteLine($"   Затримка: {notif.DelayReason} (+{notif.DelayDays} днів)");
                         }
                     }
                 }
@@ -635,9 +592,6 @@ namespace PresentationLayer
             Console.ReadKey();
         }
 
-        /// <summary>
-        /// Зміна статусу посилки з обов'язковим підтвердженням оператора для дорогих посилок
-        /// </summary>
         static void ChangeParcelStatus()
         {
             Console.Clear();
@@ -711,9 +665,6 @@ namespace PresentationLayer
             Console.ReadKey();
         }
 
-        /// <summary>
-        /// Розрахунок вартості доставки з можливістю застосування знижки
-        /// </summary>
         static void CalculateDeliveryCost()
         {
             Console.Clear();
@@ -730,7 +681,6 @@ namespace PresentationLayer
 
             var sender = _clientService.GetById(parcel.SenderId);
 
-            // Якщо безкоштовна доставка - одразу показуємо 0
             if (parcel.IsFreeDelivery)
             {
                 Console.WriteLine($"\n=== РОЗРАХУНОК ВАРТОСТІ ===");
@@ -754,7 +704,6 @@ namespace PresentationLayer
             Console.WriteLine($"Статус: {sender.Status}");
             Console.WriteLine($"Доступна знижка: {sender.GetDiscount() * 100}%");
 
-            // Перевірка святкового періоду для Легенд
             if (sender.IsLegend() && IsHolidayPeriod())
             {
                 Console.WriteLine("Святковий період - знижка 35% для Легенди!");
@@ -787,19 +736,15 @@ namespace PresentationLayer
             Console.ReadKey();
         }
 
-        /// <summary>
-        /// Перевірка чи зараз святковий період 
-        /// </summary>
         static bool IsHolidayPeriod()
         {
             var today = DateTime.Now;
-            return (today.Month == 12 && today.Day >= 20) ||
-                   (today.Month == 1 && today.Day <= 7);
+            return (today.Month == DeliveryConfiguration.HolidayStartMonth &&
+                    today.Day >= DeliveryConfiguration.HolidayStartDay) ||
+                   (today.Month == DeliveryConfiguration.HolidayEndMonth &&
+                    today.Day <= DeliveryConfiguration.HolidayEndDay);
         }
 
-        /// <summary>
-        /// Симуляція випадкової затримки доставки (5% ймовірність)
-        /// </summary>
         static void SimulateDelay()
         {
             Console.Clear();
@@ -826,15 +771,12 @@ namespace PresentationLayer
             }
             else
             {
-                Console.WriteLine($"\n {result.Data}");
+                Console.WriteLine($"\n{result.Data}");
             }
 
             Console.ReadKey();
         }
 
-        /// <summary>
-        /// Меню управління операторами
-        /// </summary>
         static void OperatorMenu()
         {
             Console.Clear();
@@ -871,9 +813,6 @@ namespace PresentationLayer
             }
         }
 
-        /// <summary>
-        /// Перегляд всіх операторів з їх статистикою
-        /// </summary>
         static void ViewAllOperators()
         {
             Console.Clear();
@@ -899,9 +838,6 @@ namespace PresentationLayer
             Console.ReadKey();
         }
 
-        /// <summary>
-        /// Меню управління точками доставки
-        /// </summary>
         static void DeliveryPointMenu()
         {
             Console.Clear();
@@ -934,9 +870,6 @@ namespace PresentationLayer
             }
         }
 
-        /// <summary>
-        /// Додавання нової точки доставки
-        /// </summary>
         static void AddDeliveryPoint()
         {
             Console.Clear();
@@ -967,15 +900,12 @@ namespace PresentationLayer
             string orgName = Console.ReadLine();
 
             var result = _deliveryPointService.Add(type, address, postalCode,
-            string.IsNullOrEmpty(orgName) ? null : orgName);
+                string.IsNullOrEmpty(orgName) ? null : orgName);
 
             Console.WriteLine(result.Success ? "\nТочку доставки додано!" : "\nПомилка!");
             Console.ReadKey();
         }
 
-        /// <summary>
-        /// Перегляд всіх точок доставки
-        /// </summary>
         static void ViewAllDeliveryPoints()
         {
             Console.Clear();
@@ -1003,9 +933,6 @@ namespace PresentationLayer
             Console.ReadKey();
         }
 
-        /// <summary>
-        /// Відображення статистики системи з популярними напрямками
-        /// </summary>
         static void ShowStatistics()
         {
             Console.Clear();
@@ -1035,7 +962,6 @@ namespace PresentationLayer
                 Console.WriteLine($"{op.Name}: {op.ProcessedParcels} посилок");
             }
 
-            // Відображення популярних напрямків
             if (stats.ContainsKey("PopularDestinations"))
             {
                 Console.WriteLine("\n--- ПОПУЛЯРНІ НАПРЯМКИ ДОСТАВКИ ---");

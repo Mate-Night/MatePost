@@ -22,6 +22,9 @@ namespace BusinessLogicLayer.Services
             _parcels = new List<Parcel>();
             _clientService = clientService;
             _random = new Random();
+
+            // Встановлюємо зворотнє посилання для динамічного підрахунку
+            _clientService.SetParcelService(this);
         }
 
         /// <summary>
@@ -42,11 +45,11 @@ namespace BusinessLogicLayer.Services
         {
             return deliveryType switch
             {
-                DeliveryType.Parcelbox => 30.0,// Поштомат - до 30 кг
-                DeliveryType.Office => 100.0,// Відділення - до 100 кг
-                DeliveryType.Address => 50.0,// Адресна доставка - до 50 кг
-                DeliveryType.Taxi => 20.0,// Таксі - до 20 кг
-                _ => 100.0
+                DeliveryType.Parcelbox => DeliveryConfiguration.MaxWeightParcelbox,
+                DeliveryType.Office => DeliveryConfiguration.MaxWeightOffice,
+                DeliveryType.Address => DeliveryConfiguration.MaxWeightAddress,
+                DeliveryType.Taxi => DeliveryConfiguration.MaxWeightTaxi,
+                _ => DeliveryConfiguration.MaxWeightOffice
             };
         }
 
@@ -68,20 +71,17 @@ namespace BusinessLogicLayer.Services
                 if (receiver == null)
                     return OperationResult.Fail("Одержувача не знайдено");
 
-                // Перевірка максимальної ваги для типу доставки
                 double maxWeight = GetMaxWeight(deliveryType);
                 if (weight > maxWeight)
                 {
                     return OperationResult.Fail($"Перевищено максимальну вагу для цього типу доставки ({maxWeight} кг)");
                 }
 
-                // Перевірка на від'ємну вагу
                 if (weight <= 0)
                 {
                     return OperationResult.Fail("Вага посилки має бути більше 0");
                 }
 
-                // Перевірка оціночної вартості
                 if (declaredValue < 0)
                 {
                     return OperationResult.Fail("Оціночна вартість не може бути від'ємною");
@@ -114,7 +114,8 @@ namespace BusinessLogicLayer.Services
                 parcel.AddNotification(ParcelStatus.AwaitingShipment);
                 _parcels.Add(parcel);
 
-                sender.IncrementParcels();
+                // Оновлюємо статус лояльності відправника після створення посилки
+                _clientService.UpdateClientLoyaltyStatus(senderId);
 
                 return OperationResult.Ok(parcel);
             }
@@ -138,7 +139,6 @@ namespace BusinessLogicLayer.Services
                 if (parcel == null)
                     return OperationResult.Fail("Посилку не знайдено");
 
-                // Перевіряємо чи потрібне підтвердження оператора
                 if (newStatus == ParcelStatus.AcceptedByOperator && parcel.RequiresOperatorConfirmation())
                 {
                     if (!operatorId.HasValue)
@@ -173,7 +173,6 @@ namespace BusinessLogicLayer.Services
                 if (parcel == null)
                     return OperationResult.Fail("Посилку не знайдено");
 
-                // 5% ймовірність затримки
                 if (_random.NextDouble() >= 0.05)
                 {
                     return OperationResult.Ok((
