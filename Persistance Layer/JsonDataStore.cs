@@ -3,6 +3,8 @@ using System.Collections.Generic;
 using System.IO;
 using System.Text.Json;
 using BusinessLogicLayer.Models;
+using System.Text.Encodings.Web; // encoder
+using System.Text.Unicode;
 
 namespace PersistenceLayer
 {
@@ -20,7 +22,11 @@ namespace PersistenceLayer
         public JsonDataStore(string dataDirectory = "Data")
         {
             _dataDirectory = dataDirectory;
-            _options = new JsonSerializerOptions { WriteIndented = true };
+            _options = new JsonSerializerOptions
+            {
+                WriteIndented = true,
+                Encoder = JavaScriptEncoder.Create(UnicodeRanges.All)
+            };
 
             // Створюємо директорію якщо вона не існує
             if (!Directory.Exists(_dataDirectory))
