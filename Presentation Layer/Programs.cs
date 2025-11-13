@@ -15,6 +15,12 @@ namespace PresentationLayer
         private static ClientService _clientService = null!;
         private static ParcelService _parcelService = null!;
         private static OperatorService _operatorService = null!;
+
+        private static AuthService _authService = null!;
+        private static string _currentUserToken = null;
+        private static string _currentUserRole = null;
+        private static string _currentUsername = null;
+
         private static DeliveryPointService _deliveryPointService = null!;
         private static CalculationService _calculationService = null!;
         private static StatisticsService _statisticsService = null!;
@@ -26,6 +32,12 @@ namespace PresentationLayer
             Console.InputEncoding = System.Text.Encoding.UTF8;
 
             InitializeServices();
+
+            if (!AuthenticateUser())
+            {
+                Console.WriteLine("Не вдалось увійти в систему.");
+                return;
+            }
             LoadData();
 
             bool exit = false;
@@ -35,6 +47,13 @@ namespace PresentationLayer
                 Console.WriteLine("------------------------------------------");
                 Console.WriteLine("|        MATEPOST - Поштова Система      |");
                 Console.WriteLine("------------------------------------------");
+                // Додаткове меню для адміністратора
+                if (_currentUserRole == "Admin")
+                {
+                    Console.ForegroundColor = ConsoleColor.Yellow;
+                    Console.WriteLine("A. Управління користувачами (Admin)");
+                    Console.ResetColor();
+                }
                 Console.WriteLine("1. Управління клієнтами");
                 Console.WriteLine("2. Управління посилками");
                 Console.WriteLine("3. Управління операторами");
@@ -48,6 +67,11 @@ namespace PresentationLayer
 
                 switch (choice)
                 {
+                    case "A":
+                    case "a":
+                        if (_currentUserRole == "Admin")
+                            UserManagementMenu();
+                        break;
                     case "1":
                         ClientMenu();
                         break;
@@ -89,6 +113,7 @@ namespace PresentationLayer
             _deliveryPointService = new DeliveryPointService();
             _calculationService = new CalculationService();
             _statisticsService = new StatisticsService(_parcelService, _operatorService);
+            _authService = new AuthService("https://localhost:7030");
         }
 
         static void LoadData()
@@ -976,5 +1001,463 @@ namespace PresentationLayer
 
             Console.ReadKey();
         }
+        // ============== МЕТОДИ АУТЕНТИФІКАЦІЇ ==============
+
+/// <summary>
+/// Аутентифікація користувача
+/// </summary>
+static bool AuthenticateUser()
+{
+    while (true)
+    {
+        Console.Clear();
+        Console.WriteLine("╔══════════════════════════════════════╗");
+        Console.WriteLine("║   MATEPOST - ВХІД В СИСТЕМУ         ║");
+        Console.WriteLine("╚══════════════════════════════════════╝");
+        Console.WriteLine();
+        Console.WriteLine("1. Логін");
+        Console.WriteLine("0. Вихід");
+        Console.WriteLine();
+        Console.Write("Оберіть опцію: ");
+
+        string choice = Console.ReadLine() ?? "";
+
+        switch (choice)
+        {
+            case "1":
+                if (Login())
+                    return true;
+                break;
+            case "0":
+                return false;
+        }
     }
+}
+
+/// <summary>
+/// Логін користувача
+/// </summary>
+static bool Login()
+{
+    Console.Clear();
+    Console.WriteLine("═══ ЛОГІН ═══");
+    Console.WriteLine();
+    Console.ForegroundColor = ConsoleColor.Yellow;
+    Console.WriteLine("💡 Дефолтний адмін:");
+    Console.WriteLine("   Логін: admin");
+    Console.WriteLine("   Пароль: Admin_password1");
+    Console.ResetColor();
+    Console.WriteLine();
+    
+    Console.Write("Логін: ");
+    string username = Console.ReadLine() ?? "";
+    
+    Console.Write("Пароль: ");
+    string password = ReadPassword();
+
+    Console.WriteLine();
+    Console.Write("⏳ Підключення до сервера...");
+
+    try
+    {
+        var result = _authService.LoginAsync(username, password).Result;
+
+        if (result.Success)
+        {
+            dynamic data = result.Data;
+            _currentUserToken = data.Token;
+            _currentUserRole = data.Role;
+            _currentUsername = username;
+
+            Console.WriteLine(" ✓");
+            Console.ForegroundColor = ConsoleColor.Green;
+            Console.WriteLine($"\n✓ Вхід виконано!");
+            Console.WriteLine($"  Роль: {_currentUserRole}");
+            Console.ResetColor();
+            Console.WriteLine("\nНатисніть будь-яку клавішу...");
+            Console.ReadKey();
+            return true;
+        }
+        else
+        {
+            Console.WriteLine(" ✗");
+            Console.ForegroundColor = ConsoleColor.Red;
+            Console.WriteLine($"\n✗ Помилка входу");
+            Console.WriteLine($"  {result.Data}");
+            Console.ResetColor();
+            Console.WriteLine("\nНатисніть будь-яку клавішу...");
+            Console.ReadKey();
+            return false;
+        }
+    }
+    catch (Exception ex)
+    {
+        Console.WriteLine(" ✗");
+        Console.ForegroundColor = ConsoleColor.Red;
+        Console.WriteLine("\n✗ Помилка з'єднання з сервером!");
+        Console.WriteLine($"  {ex.Message}");
+        Console.WriteLine("\n💡 Переконайтесь що Security API запущений:");
+        Console.WriteLine("   cd Security && dotnet run");
+        Console.ResetColor();
+        Console.WriteLine("\nНатисніть будь-яку клавішу...");
+        Console.ReadKey();
+        return false;
+    }
+}
+
+/// <summary>
+/// Читання пароля з прихованням символів
+/// </summary>
+static string ReadPassword()
+{
+    string password = "";
+    ConsoleKeyInfo key;
+
+    do
+    {
+        key = Console.ReadKey(true);
+
+        if (key.Key != ConsoleKey.Backspace && key.Key != ConsoleKey.Enter)
+        {
+            password += key.KeyChar;
+            Console.Write("*");
+        }
+        else if (key.Key == ConsoleKey.Backspace && password.Length > 0)
+        {
+            password = password.Substring(0, password.Length - 1);
+            Console.Write("\b \b");
+        }
+    } while (key.Key != ConsoleKey.Enter);
+
+    Console.WriteLine();
+    return password;
+}
+
+// ============== УПРАВЛІННЯ КОРИСТУВАЧАМИ (тільки для Admin) ==============
+
+/// <summary>
+/// Меню управління користувачами
+/// </summary>
+static void UserManagementMenu()
+{
+    if (_currentUserRole != "Admin")
+    {
+        Console.ForegroundColor = ConsoleColor.Red;
+        Console.WriteLine("\n✗ Доступ заборонено! Тільки для адміністраторів.");
+        Console.ResetColor();
+        Console.ReadKey();
+        return;
+    }
+
+    while (true)
+    {
+        Console.Clear();
+        Console.WriteLine("═══ УПРАВЛІННЯ КОРИСТУВАЧАМИ ═══");
+        Console.WriteLine();
+        Console.WriteLine("1. Список користувачів");
+        Console.WriteLine("2. Зареєструвати нового користувача");
+        Console.WriteLine("3. Змінити роль користувача");
+        Console.WriteLine("4. Змінити свій пароль");
+        Console.WriteLine("0. Назад");
+        Console.WriteLine();
+        Console.Write("Оберіть опцію: ");
+
+        string choice = Console.ReadLine() ?? "";
+
+        switch (choice)
+        {
+            case "1":
+                ListUsers();
+                break;
+            case "2":
+                RegisterNewUser();
+                break;
+            case "3":
+                ChangeUserRole();
+                break;
+            case "4":
+                ChangePassword();
+                break;
+            case "0":
+                return;
+        }
+    }
+}
+
+/// <summary>
+/// Список всіх користувачів
+/// </summary>
+static void ListUsers()
+{
+    Console.Clear();
+    Console.WriteLine("═══ СПИСОК КОРИСТУВАЧІВ ═══");
+    Console.WriteLine();
+
+    try
+    {
+        var result = _authService.GetUsersAsync(_currentUserToken).Result;
+
+        if (result.Success)
+        {
+            var users = (UserInfo[])result.Data;
+            
+            if (users.Length == 0)
+            {
+                Console.WriteLine("Користувачів не знайдено.");
+            }
+            else
+            {
+                Console.WriteLine($"{"Логін",-20} {"Роль",-15}");
+                Console.WriteLine(new string('─', 40));
+                
+                foreach (var user in users)
+                {
+                    Console.Write($"{user.username,-20} ");
+                    
+                    // Кольорове відображення ролі
+                    Console.ForegroundColor = user.role switch
+                    {
+                        "Admin" => ConsoleColor.Red,
+                        "Manager" => ConsoleColor.Yellow,
+                        "Operator" => ConsoleColor.Cyan,
+                        "Client" => ConsoleColor.Green,
+                        _ => ConsoleColor.White
+                    };
+                    Console.WriteLine($"{user.role,-15}");
+                    Console.ResetColor();
+                }
+            }
+        }
+        else
+        {
+            Console.ForegroundColor = ConsoleColor.Red;
+            Console.WriteLine($"✗ Помилка: {result.Data}");
+            Console.ResetColor();
+        }
+    }
+    catch (Exception ex)
+    {
+        Console.ForegroundColor = ConsoleColor.Red;
+        Console.WriteLine($"✗ Помилка: {ex.Message}");
+        Console.ResetColor();
+    }
+
+    Console.WriteLine();
+    Console.WriteLine("Натисніть будь-яку клавішу...");
+    Console.ReadKey();
+}
+
+/// <summary>
+/// Реєстрація нового користувача (тільки адміном)
+/// </summary>
+static void RegisterNewUser()
+{
+    Console.Clear();
+    Console.WriteLine("═══ РЕЄСТРАЦІЯ КОРИСТУВАЧА ═══");
+    Console.WriteLine();
+    
+    Console.Write("Логін: ");
+    string username = Console.ReadLine() ?? "";
+    
+    if (string.IsNullOrWhiteSpace(username))
+    {
+        Console.ForegroundColor = ConsoleColor.Red;
+        Console.WriteLine("✗ Логін не може бути порожнім!");
+        Console.ResetColor();
+        Console.ReadKey();
+        return;
+    }
+    
+    Console.Write("Пароль: ");
+    string password = ReadPassword();
+    
+    Console.WriteLine();
+    Console.WriteLine("Роль:");
+    Console.WriteLine("1. Admin");
+    Console.WriteLine("2. Manager");
+    Console.WriteLine("3. Operator");
+    Console.WriteLine("4. Client");
+    Console.Write("Оберіть: ");
+    
+    string role = Console.ReadLine() switch
+    {
+        "1" => "Admin",
+        "2" => "Manager",
+        "3" => "Operator",
+        _ => "Client"
+    };
+
+    Console.WriteLine();
+    Console.Write("⏳ Створення користувача...");
+
+    try
+    {
+        var result = _authService.RegisterAsync(_currentUserToken, username, password, role).Result;
+
+        if (result.Success)
+        {
+            Console.WriteLine(" ✓");
+            Console.ForegroundColor = ConsoleColor.Green;
+            Console.WriteLine($"\n✓ {result.Data}");
+            Console.ResetColor();
+        }
+        else
+        {
+            Console.WriteLine(" ✗");
+            Console.ForegroundColor = ConsoleColor.Red;
+            Console.WriteLine($"\n✗ {result.Data}");
+            Console.ResetColor();
+        }
+    }
+    catch (Exception ex)
+    {
+        Console.WriteLine(" ✗");
+        Console.ForegroundColor = ConsoleColor.Red;
+        Console.WriteLine($"\n✗ Помилка: {ex.Message}");
+        Console.ResetColor();
+    }
+
+    Console.WriteLine("\nНатисніть будь-яку клавішу...");
+    Console.ReadKey();
+}
+
+/// <summary>
+/// Зміна ролі користувача
+/// </summary>
+static void ChangeUserRole()
+{
+    Console.Clear();
+    Console.WriteLine("═══ ЗМІНА РОЛІ КОРИСТУВАЧА ═══");
+    Console.WriteLine();
+    
+    Console.Write("Логін користувача: ");
+    string username = Console.ReadLine() ?? "";
+    
+    if (string.IsNullOrWhiteSpace(username))
+    {
+        Console.ForegroundColor = ConsoleColor.Red;
+        Console.WriteLine("✗ Логін не може бути порожнім!");
+        Console.ResetColor();
+        Console.ReadKey();
+        return;
+    }
+    
+    Console.WriteLine();
+    Console.WriteLine("Нова роль:");
+    Console.WriteLine("1. Admin");
+    Console.WriteLine("2. Manager");
+    Console.WriteLine("3. Operator");
+    Console.WriteLine("4. Client");
+    Console.Write("Оберіть: ");
+    
+    string role = Console.ReadLine() switch
+    {
+        "1" => "Admin",
+        "2" => "Manager",
+        "3" => "Operator",
+        _ => "Client"
+    };
+
+    Console.WriteLine();
+    Console.Write("⏳ Зміна ролі...");
+
+    try
+    {
+        var result = _authService.ChangeUserRoleAsync(_currentUserToken, username, role).Result;
+        
+        if (result.Success)
+        {
+            Console.WriteLine(" ✓");
+            Console.ForegroundColor = ConsoleColor.Green;
+            Console.WriteLine($"\n✓ {result.Data}");
+            Console.ResetColor();
+        }
+        else
+        {
+            Console.WriteLine(" ✗");
+            Console.ForegroundColor = ConsoleColor.Red;
+            Console.WriteLine($"\n✗ {result.Data}");
+            Console.ResetColor();
+        }
+    }
+    catch (Exception ex)
+    {
+        Console.WriteLine(" ✗");
+        Console.ForegroundColor = ConsoleColor.Red;
+        Console.WriteLine($"\n✗ Помилка: {ex.Message}");
+        Console.ResetColor();
+    }
+
+    Console.WriteLine("\nНатисніть будь-яку клавішу...");
+    Console.ReadKey();
+}
+
+/// <summary>
+/// Зміна власного пароля
+/// </summary>
+static void ChangePassword()
+{
+    Console.Clear();
+    Console.WriteLine("═══ ЗМІНА ПАРОЛЯ ═══");
+    Console.WriteLine();
+    
+    Console.Write("Старий пароль: ");
+    string oldPassword = ReadPassword();
+    
+    Console.Write("Новий пароль: ");
+    string newPassword = ReadPassword();
+    
+    Console.Write("Підтвердіть новий пароль: ");
+    string confirmPassword = ReadPassword();
+
+    if (newPassword != confirmPassword)
+    {
+        Console.ForegroundColor = ConsoleColor.Red;
+        Console.WriteLine("\n✗ Паролі не співпадають!");
+        Console.ResetColor();
+        Console.ReadKey();
+        return;
+    }
+
+    Console.WriteLine();
+    Console.Write("⏳ Зміна пароля...");
+
+    try
+    {
+        var result = _authService.ChangePasswordAsync(_currentUserToken, oldPassword, newPassword).Result;
+        
+        if (result.Success)
+        {
+            Console.WriteLine(" ✓");
+            Console.ForegroundColor = ConsoleColor.Green;
+            Console.WriteLine($"\n✓ {result.Data}");
+            Console.WriteLine("\nВи будете автоматично вийшли з системи.");
+            Console.WriteLine("Увійдіть знову з новим паролем.");
+            Console.ResetColor();
+            Console.ReadKey();
+            
+            // Виходимо з програми після зміни пароля
+            Environment.Exit(0);
+        }
+        else
+        {
+            Console.WriteLine(" ✗");
+            Console.ForegroundColor = ConsoleColor.Red;
+            Console.WriteLine($"\n✗ {result.Data}");
+            Console.ResetColor();
+        }
+    }
+    catch (Exception ex)
+    {
+        Console.WriteLine(" ✗");
+        Console.ForegroundColor = ConsoleColor.Red;
+        Console.WriteLine($"\n✗ Помилка: {ex.Message}");
+        Console.ResetColor();
+    }
+
+    Console.WriteLine("\nНатисніть будь-яку клавішу...");
+    Console.ReadKey();
+}
+    }
+
 }
