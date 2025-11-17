@@ -7,6 +7,7 @@ namespace BusinessLogicLayer.Models
     /// </summary>
     public class Notification
     {
+        public int Id { get; set; }
         /// <summary>Час створення повідомлення</summary>
         public DateTime Timestamp { get; set; }
 

@@ -1,23 +1,23 @@
 {
   "format": 1,
   "restore": {
-    "C:\\Users\\Mate\\source\\repos\\Mate-Night\\MatePost\\Persistance Layer\\PersistanceLayer.csproj": {}
+    "C:\\Users\\malyt\\Source\\Repos\\MatePost\\Persistance Layer\\PersistanceLayer.csproj": {}
   },
   "projects": {
-    "C:\\Users\\Mate\\source\\repos\\Mate-Night\\MatePost\\Bussiness Logic Layer\\BusinessLogicLayer.csproj": {
+    "C:\\Users\\malyt\\Source\\Repos\\MatePost\\Bussiness Logic Layer\\BusinessLogicLayer.csproj": {
       "version": "1.0.0",
       "restore": {
-        "projectUniqueName": "C:\\Users\\Mate\\source\\repos\\Mate-Night\\MatePost\\Bussiness Logic Layer\\BusinessLogicLayer.csproj",
+        "projectUniqueName": "C:\\Users\\malyt\\Source\\Repos\\MatePost\\Bussiness Logic Layer\\BusinessLogicLayer.csproj",
         "projectName": "BusinessLogicLayer",
-        "projectPath": "C:\\Users\\Mate\\source\\repos\\Mate-Night\\MatePost\\Bussiness Logic Layer\\BusinessLogicLayer.csproj",
-        "packagesPath": "C:\\Users\\Mate\\.nuget\\packages\\",
-        "outputPath": "C:\\Users\\Mate\\source\\repos\\Mate-Night\\MatePost\\Bussiness Logic Layer\\obj\\",
+        "projectPath": "C:\\Users\\malyt\\Source\\Repos\\MatePost\\Bussiness Logic Layer\\BusinessLogicLayer.csproj",
+        "packagesPath": "C:\\Users\\malyt\\.nuget\\packages\\",
+        "outputPath": "C:\\Users\\malyt\\Source\\Repos\\MatePost\\Bussiness Logic Layer\\obj\\",
         "projectStyle": "PackageReference",
         "fallbackFolders": [
           "C:\\Program Files (x86)\\Microsoft Visual Studio\\Shared\\NuGetPackages"
         ],
         "configFilePaths": [
-          "C:\\Users\\Mate\\AppData\\Roaming\\NuGet\\NuGet.Config",
+          "C:\\Users\\malyt\\AppData\\Roaming\\NuGet\\NuGet.Config",
           "C:\\Program Files (x86)\\NuGet\\Config\\Microsoft.VisualStudio.FallbackLocation.config",
           "C:\\Program Files (x86)\\NuGet\\Config\\Microsoft.VisualStudio.Offline.config"
         ],
@@ -26,6 +26,7 @@
         ],
         "sources": {
           "C:\\Program Files (x86)\\Microsoft SDKs\\NuGetPackages\\": {},
+          "C:\\Program Files\\dotnet\\library-packs": {},
           "https://api.nuget.org/v3/index.json": {}
         },
         "frameworks": {
@@ -65,24 +66,24 @@
               "privateAssets": "all"
             }
           },
-          "runtimeIdentifierGraphPath": "C:\\Program Files\\dotnet\\sdk\\9.0.304/PortableRuntimeIdentifierGraph.json"
+          "runtimeIdentifierGraphPath": "C:\\Program Files\\dotnet\\sdk\\9.0.307/PortableRuntimeIdentifierGraph.json"
         }
       }
     },
-    "C:\\Users\\Mate\\source\\repos\\Mate-Night\\MatePost\\Persistance Layer\\PersistanceLayer.csproj": {
+    "C:\\Users\\malyt\\Source\\Repos\\MatePost\\Persistance Layer\\PersistanceLayer.csproj": {
       "version": "1.0.0",
       "restore": {
-        "projectUniqueName": "C:\\Users\\Mate\\source\\repos\\Mate-Night\\MatePost\\Persistance Layer\\PersistanceLayer.csproj",
+        "projectUniqueName": "C:\\Users\\malyt\\Source\\Repos\\MatePost\\Persistance Layer\\PersistanceLayer.csproj",
         "projectName": "PersistanceLayer",
-        "projectPath": "C:\\Users\\Mate\\source\\repos\\Mate-Night\\MatePost\\Persistance Layer\\PersistanceLayer.csproj",
-        "packagesPath": "C:\\Users\\Mate\\.nuget\\packages\\",
-        "outputPath": "C:\\Users\\Mate\\source\\repos\\Mate-Night\\MatePost\\Persistance Layer\\obj\\",
+        "projectPath": "C:\\Users\\malyt\\Source\\Repos\\MatePost\\Persistance Layer\\PersistanceLayer.csproj",
+        "packagesPath": "C:\\Users\\malyt\\.nuget\\packages\\",
+        "outputPath": "C:\\Users\\malyt\\Source\\Repos\\MatePost\\Persistance Layer\\obj\\",
         "projectStyle": "PackageReference",
         "fallbackFolders": [
           "C:\\Program Files (x86)\\Microsoft Visual Studio\\Shared\\NuGetPackages"
         ],
         "configFilePaths": [
-          "C:\\Users\\Mate\\AppData\\Roaming\\NuGet\\NuGet.Config",
+          "C:\\Users\\malyt\\AppData\\Roaming\\NuGet\\NuGet.Config",
           "C:\\Program Files (x86)\\NuGet\\Config\\Microsoft.VisualStudio.FallbackLocation.config",
           "C:\\Program Files (x86)\\NuGet\\Config\\Microsoft.VisualStudio.Offline.config"
         ],
@@ -91,14 +92,15 @@
         ],
         "sources": {
           "C:\\Program Files (x86)\\Microsoft SDKs\\NuGetPackages\\": {},
+          "C:\\Program Files\\dotnet\\library-packs": {},
           "https://api.nuget.org/v3/index.json": {}
         },
         "frameworks": {
           "net8.0": {
             "targetAlias": "net8.0",
             "projectReferences": {
-              "C:\\Users\\Mate\\source\\repos\\Mate-Night\\MatePost\\Bussiness Logic Layer\\BusinessLogicLayer.csproj": {
-                "projectPath": "C:\\Users\\Mate\\source\\repos\\Mate-Night\\MatePost\\Bussiness Logic Layer\\BusinessLogicLayer.csproj"
+              "C:\\Users\\malyt\\Source\\Repos\\MatePost\\Bussiness Logic Layer\\BusinessLogicLayer.csproj": {
+                "projectPath": "C:\\Users\\malyt\\Source\\Repos\\MatePost\\Bussiness Logic Layer\\BusinessLogicLayer.csproj"
               }
             }
           }
@@ -134,7 +136,7 @@
               "privateAssets": "all"
             }
           },
-          "runtimeIdentifierGraphPath": "C:\\Program Files\\dotnet\\sdk\\9.0.304/PortableRuntimeIdentifierGraph.json"
+          "runtimeIdentifierGraphPath": "C:\\Program Files\\dotnet\\sdk\\9.0.307/PortableRuntimeIdentifierGraph.json"
         }
       }
     }

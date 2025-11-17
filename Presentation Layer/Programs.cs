@@ -20,6 +20,7 @@ namespace PresentationLayer
         private static string _currentUserToken = null;
         private static string _currentUserRole = null;
         private static string _currentUsername = null;
+        private static int _currentClientId = 0;
 
         private static DeliveryPointService _deliveryPointService = null!;
         private static CalculationService _calculationService = null!;
@@ -1012,7 +1013,7 @@ static bool AuthenticateUser()
     {
         Console.Clear();
         Console.WriteLine("╔══════════════════════════════════════╗");
-        Console.WriteLine("║   MATEPOST - ВХІД В СИСТЕМУ         ║");
+        Console.WriteLine("║       MATEPOST - ВХІД В СИСТЕМУ      ║");
         Console.WriteLine("╚══════════════════════════════════════╝");
         Console.WriteLine();
         Console.WriteLine("1. Логін");
@@ -1043,9 +1044,9 @@ static bool Login()
     Console.WriteLine("═══ ЛОГІН ═══");
     Console.WriteLine();
     Console.ForegroundColor = ConsoleColor.Yellow;
-    Console.WriteLine("💡 Дефолтний адмін:");
-    Console.WriteLine("   Логін: admin");
-    Console.WriteLine("   Пароль: Admin_password1");
+    Console.WriteLine("  Дефолтний адмін:");
+    Console.WriteLine("  Логін: admin");
+    Console.WriteLine("  Пароль: Admin_password1");
     Console.ResetColor();
     Console.WriteLine();
     
@@ -1056,7 +1057,7 @@ static bool Login()
     string password = ReadPassword();
 
     Console.WriteLine();
-    Console.Write("⏳ Підключення до сервера...");
+    Console.Write(" Підключення до сервера...");
 
     try
     {
@@ -1096,7 +1097,7 @@ static bool Login()
         Console.ForegroundColor = ConsoleColor.Red;
         Console.WriteLine("\n✗ Помилка з'єднання з сервером!");
         Console.WriteLine($"  {ex.Message}");
-        Console.WriteLine("\n💡 Переконайтесь що Security API запущений:");
+        Console.WriteLine("\nПереконайтесь що Security API запущений:");
         Console.WriteLine("   cd Security && dotnet run");
         Console.ResetColor();
         Console.WriteLine("\nНатисніть будь-яку клавішу...");
@@ -1288,7 +1289,7 @@ static void RegisterNewUser()
     };
 
     Console.WriteLine();
-    Console.Write("⏳ Створення користувача...");
+    Console.Write("Створення користувача...");
 
     try
     {
@@ -1359,7 +1360,7 @@ static void ChangeUserRole()
     };
 
     Console.WriteLine();
-    Console.Write("⏳ Зміна ролі...");
+    Console.Write("Зміна ролі...");
 
     try
     {
@@ -1420,7 +1421,7 @@ static void ChangePassword()
     }
 
     Console.WriteLine();
-    Console.Write("⏳ Зміна пароля...");
+    Console.Write("Зміна пароля...");
 
     try
     {

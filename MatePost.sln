@@ -9,6 +9,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "BusinessLogicLayer", "Bussi
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "PersistanceLayer", "Persistance Layer\PersistanceLayer.csproj", "{C66B2C9F-D409-4881-B0DE-80E4499155B4}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Integration Layer", "Integration Layer\Integration Layer.csproj", "{1D9CDA50-939D-4300-9A48-CA9D2DD4C42A}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -27,6 +29,10 @@ Global
 		{C66B2C9F-D409-4881-B0DE-80E4499155B4}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{C66B2C9F-D409-4881-B0DE-80E4499155B4}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{C66B2C9F-D409-4881-B0DE-80E4499155B4}.Release|Any CPU.Build.0 = Release|Any CPU
+		{1D9CDA50-939D-4300-9A48-CA9D2DD4C42A}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{1D9CDA50-939D-4300-9A48-CA9D2DD4C42A}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{1D9CDA50-939D-4300-9A48-CA9D2DD4C42A}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{1D9CDA50-939D-4300-9A48-CA9D2DD4C42A}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

@@ -7,6 +7,7 @@ namespace BusinessLogicLayer.Models
     /// </summary>
     public class StatusChange
     {
+        public int Id { get; set; }
         /// <summary>Новий статус посилки</summary>
         public ParcelStatus Status { get; set; }
 
