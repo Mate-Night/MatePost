@@ -9,6 +9,26 @@ namespace BusinessLogicLayer.Services
     public class CalculationService
     {
         /// <summary>
+        /// Сервіс для розрахунку вартості доставки
+        /// </summary>
+        private decimal _currentEurRate = DeliveryConfiguration.EuroToUahRate;
+
+        /// <summary>
+        /// Встановлює актуальний курс EUR/UAH
+        /// </summary>
+        public void SetEuroRate(decimal rate)
+        {
+            if (rate > 0)
+            {
+                _currentEurRate = rate;
+            }
+        }
+
+        /// <summary>
+        /// Отримує поточний курс EUR/UAH
+        /// </summary>
+        public decimal GetEuroRate() => _currentEurRate;
+        /// <summary>
         /// Розраховує базову вартість доставки посилки
         /// </summary>
         public decimal CalculateDeliveryCost(Parcel parcel)
@@ -63,7 +83,7 @@ namespace BusinessLogicLayer.Services
                     return 0m;
 
                 // Конвертація оціночної вартості в євро
-                decimal valueInEuro = parcel.DeclaredValue / DeliveryConfiguration.EuroToUahRate;
+                decimal valueInEuro = parcel.DeclaredValue / _currentEurRate;
 
                 // Якщо вартість перевищує поріг, нараховується мито
                 if (valueInEuro > DeliveryConfiguration.CustomsThresholdEuro)

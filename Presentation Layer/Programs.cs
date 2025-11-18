@@ -4,65 +4,83 @@ using System.Linq;
 using BusinessLogicLayer.Models;
 using BusinessLogicLayer.Services;
 using PersistenceLayer;
+using IntegrationLayer.Services;
+using IntegrationLayer.Database;
+using Microsoft.EntityFrameworkCore;
 
 namespace PresentationLayer
 {
-    /// <summary>
-    /// Головний клас консольного додатку MatePost - система управління поштовими послугами
-    /// </summary>
     class Program
     {
+        // Сервіси Business Logic Layer
         private static ClientService _clientService = null!;
         private static ParcelService _parcelService = null!;
         private static OperatorService _operatorService = null!;
-
-        private static AuthService _authService = null!;
-        private static string _currentUserToken = null;
-        private static string _currentUserRole = null;
-        private static string _currentUsername = null;
-        private static int _currentClientId = 0;
-
         private static DeliveryPointService _deliveryPointService = null!;
         private static CalculationService _calculationService = null!;
         private static StatisticsService _statisticsService = null!;
+
+        // Сервіси Integration Layer
+        private static AuthService _authService = null!;
+        private static MonobankService _monobankService = null!;
+        private static DatabaseService _databaseService = null!;
+
+        // Persistence Layer
         private static JsonDataStore _dataStore = null!;
 
-        static void Main(string[] args)
+        // Аутентифікація
+        private static string _currentUserToken = null;
+        private static string _currentUserRole = null;
+        private static string _currentUsername = null;
+
+        // Режим роботи з даними
+        private static bool _useDatabaseMode = true;
+
+        static async System.Threading.Tasks.Task Main(string[] args)
         {
             Console.OutputEncoding = System.Text.Encoding.UTF8;
             Console.InputEncoding = System.Text.Encoding.UTF8;
 
-            InitializeServices();
+            await InitializeServicesAsync();
 
             if (!AuthenticateUser())
             {
                 Console.WriteLine("Не вдалось увійти в систему.");
                 return;
             }
-            LoadData();
+
+            await LoadDataAsync();
+            await UpdateCurrencyRatesAsync();
 
             bool exit = false;
             while (!exit)
             {
                 Console.Clear();
-                Console.WriteLine("------------------------------------------");
-                Console.WriteLine("|        MATEPOST - Поштова Система      |");
-                Console.WriteLine("------------------------------------------");
-                // Додаткове меню для адміністратора
+                Console.WriteLine("╔══════════════════════════════════════╗");
+                Console.WriteLine("║     MATEPOST - Поштова Система       ║");
+                Console.WriteLine("╚══════════════════════════════════════╝");
+                Console.WriteLine($"Користувач: {_currentUsername} ({_currentUserRole})");
+                Console.WriteLine($"Режим даних: {(_useDatabaseMode ? "База даних (SQLite)" : "JSON файли")}");
+                Console.WriteLine($"Курс EUR/UAH: {_calculationService.GetEuroRate():F2} грн");
+                Console.WriteLine();
+
                 if (_currentUserRole == "Admin")
                 {
                     Console.ForegroundColor = ConsoleColor.Yellow;
                     Console.WriteLine("A. Управління користувачами (Admin)");
                     Console.ResetColor();
                 }
+
                 Console.WriteLine("1. Управління клієнтами");
                 Console.WriteLine("2. Управління посилками");
                 Console.WriteLine("3. Управління операторами");
                 Console.WriteLine("4. Управління точками доставки");
                 Console.WriteLine("5. Статистика");
-                Console.WriteLine("6. Зберегти дані");
+                Console.WriteLine("6. Оновити курси валют (Monobank API)");
+                Console.WriteLine("7. Зберегти дані");
+                Console.WriteLine("8. Перемкнути режим (БД ↔ JSON)");
                 Console.WriteLine("0. Вихід");
-                Console.Write("Оберіть опцію: ");
+                Console.Write("\nОберіть опцію: ");
 
                 string choice = Console.ReadLine() ?? "";
 
@@ -89,12 +107,18 @@ namespace PresentationLayer
                         ShowStatistics();
                         break;
                     case "6":
-                        SaveData();
-                        Console.WriteLine("Дані збережено!");
+                        await ShowAllCurrencyRatesAsync();
+                        break;
+                    case "7":
+                        await SaveDataAsync();
+                        Console.WriteLine("\nДані збережено!");
                         Console.ReadKey();
                         break;
+                    case "8":
+                        await ToggleDataModeAsync();
+                        break;
                     case "0":
-                        SaveData();
+                        await SaveDataAsync();
                         exit = true;
                         break;
                     default:
@@ -105,51 +129,190 @@ namespace PresentationLayer
             }
         }
 
-        static void InitializeServices()
+        // ============== ІНІЦІАЛІЗАЦІЯ ==============
+
+        static async System.Threading.Tasks.Task InitializeServicesAsync()
         {
-            _dataStore = new JsonDataStore();
+            // Business Logic Layer
             _clientService = new ClientService();
             _parcelService = new ParcelService(_clientService);
             _operatorService = new OperatorService();
             _deliveryPointService = new DeliveryPointService();
             _calculationService = new CalculationService();
             _statisticsService = new StatisticsService(_parcelService, _operatorService);
+
+            // Integration Layer
             _authService = new AuthService("https://localhost:7030");
+            _monobankService = new MonobankService();
+            _dataStore = new JsonDataStore();
+
+            if (_useDatabaseMode)
+            {
+                try
+                {
+                    var options = new DbContextOptionsBuilder<ApplicationDbContext>()
+                        .UseSqlite("Data Source=matepost.db")
+                        .Options;
+
+                    var dbContext = new ApplicationDbContext(options);
+                    await dbContext.Database.EnsureCreatedAsync(); 
+
+                    _databaseService = new DatabaseService(dbContext);
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"  БД помилка: {ex.Message}");
+                    _useDatabaseMode = false;
+                }
+            }
         }
 
-        static void LoadData()
+        // ============== MONOBANK API ==============
+
+        static async System.Threading.Tasks.Task UpdateCurrencyRatesAsync()
         {
             try
             {
-                _clientService.LoadClients(_dataStore.LoadClients());
-                _parcelService.LoadParcels(_dataStore.LoadParcels());
-                _operatorService.LoadOperators(_dataStore.LoadOperators());
-                _deliveryPointService.LoadDeliveryPoints(_dataStore.LoadDeliveryPoints());
+                Console.Write("\nОновлення курсів валют...");
+                var result = await _monobankService.GetEurToUahRateAsync();
+
+                if (result.Success)
+                {
+                    _calculationService.SetEuroRate(result.Rate);
+                    Console.WriteLine($" EUR/UAH: {result.Rate:F2} грн");
+                }
+                else
+                {
+                    Console.ForegroundColor = ConsoleColor.Yellow;
+                    Console.WriteLine($" {result.Message}");
+                    Console.ResetColor();
+                    _calculationService.SetEuroRate(result.Rate);
+                }
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"Помилка при завантаженні даних: {ex.Message}");
-                Console.WriteLine("Програма продовжить роботу з порожньою базою даних.");
-                Console.ReadKey();
+                Console.WriteLine($"\n Помилка: {ex.Message}");
             }
         }
 
-        static void SaveData()
-        {
-            _dataStore.SaveClients(_clientService.GetAll());
-            _dataStore.SaveParcels(_parcelService.GetAll());
-            _dataStore.SaveOperators(_operatorService.GetAll());
-            _dataStore.SaveDeliveryPoints(_deliveryPointService.GetAll());
-        }
-
-        static void ClientMenu()
+        static async System.Threading.Tasks.Task ShowAllCurrencyRatesAsync()
         {
             Console.Clear();
-            Console.WriteLine("=== УПРАВЛІННЯ КЛІЄНТАМИ ===");
-            Console.WriteLine("1. Додати клієнта");
-            Console.WriteLine("2. Переглянути всіх клієнтів");
-            Console.WriteLine("3. Знайти клієнта");
-            Console.WriteLine("4. Видалити клієнта");
+            Console.WriteLine("═══ КУРСИ ВАЛЮТ MONOBANK ═══\n");
+            Console.Write(" Завантаження курсів...");
+
+            var result = await _monobankService.GetAllRatesAsync();
+
+            if (!result.Success)
+            {
+                Console.ForegroundColor = ConsoleColor.Red;
+                Console.WriteLine($"\n {result.Message}");
+                Console.ResetColor();
+                Console.ReadKey();
+                return;
+            }
+            Console.WriteLine($"\n Оновлено: {result.LastUpdate:dd.MM.yyyy HH:mm:ss}\n");
+
+            foreach (var rate in result.Rates)
+            {
+                Console.WriteLine($"{rate.CurrencyPair}:");
+                Console.WriteLine($"  Купівля:  {rate.RateBuy:F2}");
+                Console.WriteLine($"  Продаж:   {rate.RateSell:F2}");
+                Console.WriteLine();
+            }
+
+            await UpdateCurrencyRatesAsync();
+
+            Console.WriteLine("\nНатисніть будь-яку клавішу...");
+            Console.ReadKey();
+        }
+
+        // ============== РОБОТА З ДАНИМИ ==============
+
+        static async System.Threading.Tasks.Task LoadDataAsync()
+        {
+            try
+            {
+                if (_useDatabaseMode && _databaseService != null) // ⭐ ПЕРЕВІРКА
+                {
+                    Console.WriteLine(" Завантаження з БД...");
+                    var clients = await _databaseService.GetAllClientsAsync();
+                    var parcels = await _databaseService.GetAllParcelsAsync();
+                    var operators = await _databaseService.GetAllOperatorsAsync();
+                    var points = await _databaseService.GetAllDeliveryPointsAsync();
+
+                    _clientService.LoadClients(clients);
+                    _parcelService.LoadParcels(parcels);
+                    _operatorService.LoadOperators(operators);
+                    _deliveryPointService.LoadDeliveryPoints(points);
+
+                    Console.WriteLine($" БД: {clients.Count} клієнтів, {parcels.Count} посилок");
+                }
+                else
+                {
+                    Console.WriteLine(" Завантаження з JSON...");
+                    _clientService.LoadClients(_dataStore.LoadClients());
+                    _parcelService.LoadParcels(_dataStore.LoadParcels());
+                    _operatorService.LoadOperators(_dataStore.LoadOperators());
+                    _deliveryPointService.LoadDeliveryPoints(_dataStore.LoadDeliveryPoints());
+
+                    Console.WriteLine($" JSON: {_clientService.GetAll().Count} клієнтів");
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($" Помилка: {ex.Message}");
+                if (_useDatabaseMode)
+                {
+                    _useDatabaseMode = false;
+                    await LoadDataAsync(); 
+                }
+            }
+        }
+
+        static async System.Threading.Tasks.Task SaveDataAsync()
+        {
+            try
+            {
+                if (_useDatabaseMode)
+                {
+                    Console.Write(" Збереження в базу даних...");
+                    foreach (var client in _clientService.GetAll())
+                        await _databaseService.SaveClientAsync(client);
+
+                    foreach (var parcel in _parcelService.GetAll())
+                        await _databaseService.SaveParcelAsync(parcel);
+
+                    foreach (var op in _operatorService.GetAll())
+                        await _databaseService.SaveOperatorAsync(op);
+
+                    foreach (var point in _deliveryPointService.GetAll())
+                        await _databaseService.SaveDeliveryPointAsync(point);
+                }
+                else
+                {
+                    Console.Write(" Збереження в JSON файли...");
+                    _dataStore.SaveClients(_clientService.GetAll());
+                    _dataStore.SaveParcels(_parcelService.GetAll());
+                    _dataStore.SaveOperators(_operatorService.GetAll());
+                    _dataStore.SaveDeliveryPoints(_deliveryPointService.GetAll());
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"\n Помилка збереження: {ex.Message}");
+            }
+        }
+
+        static async System.Threading.Tasks.Task ToggleDataModeAsync()
+        {
+            Console.Clear();
+            Console.WriteLine("═══ ПЕРЕМИКАННЯ РЕЖИМУ ДАНИХ ═══\n");
+            Console.WriteLine($"Поточний режим: {(_useDatabaseMode ? "База даних" : "JSON файли")}");
+            Console.WriteLine();
+            Console.WriteLine("1. Перемкнути на " + (_useDatabaseMode ? "JSON файли" : "Базу даних"));
+            Console.WriteLine("2. Міграція: JSON → База даних");
+            Console.WriteLine("3. Експорт: База даних → JSON");
             Console.WriteLine("0. Назад");
             Console.Write("\nОберіть опцію: ");
 
@@ -158,24 +321,529 @@ namespace PresentationLayer
             switch (choice)
             {
                 case "1":
-                    AddClient();
+                    await SaveDataAsync();
+                    _useDatabaseMode = !_useDatabaseMode;
+                    await LoadDataAsync();
+                    Console.WriteLine("\n Режим змінено!");
+                    Console.ReadKey();
                     break;
+
                 case "2":
-                    ViewAllClients();
+                    await MigrateJsonToDatabaseAsync();
                     break;
+
                 case "3":
-                    SearchClient();
+                    await ExportDatabaseToJsonAsync();
                     break;
-                case "4":
-                    DeleteClient();
-                    break;
+            }
+        }
+
+        static async System.Threading.Tasks.Task MigrateJsonToDatabaseAsync()
+        {
+            Console.WriteLine("\n Міграція JSON → База даних...");
+
+            try
+            {
+                var clients = _dataStore.LoadClients();
+                var parcels = _dataStore.LoadParcels();
+                var operators = _dataStore.LoadOperators();
+                var points = _dataStore.LoadDeliveryPoints();
+
+                await _databaseService.MigrateFromJsonAsync(clients, parcels, operators, points);
+
+                Console.WriteLine($" Мігровано: {clients.Count} клієнтів, {parcels.Count} посилок");
+                Console.WriteLine(" Дані успішно перенесені в базу даних!");
+
+                _useDatabaseMode = true;
+                await LoadDataAsync();
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"✗ Помилка міграції: {ex.Message}");
+            }
+
+            Console.ReadKey();
+        }
+
+        static async System.Threading.Tasks.Task ExportDatabaseToJsonAsync()
+        {
+            Console.WriteLine("\n Експорт База даних → JSON...");
+
+            try
+            {
+                var clients = await _databaseService.GetAllClientsAsync();
+                var parcels = await _databaseService.GetAllParcelsAsync();
+                var operators = await _databaseService.GetAllOperatorsAsync();
+                var points = await _databaseService.GetAllDeliveryPointsAsync();
+
+                _dataStore.SaveClients(clients);
+                _dataStore.SaveParcels(parcels);
+                _dataStore.SaveOperators(operators);
+                _dataStore.SaveDeliveryPoints(points);
+
+                Console.WriteLine($" Експортовано: {clients.Count} клієнтів, {parcels.Count} посилок");
+                Console.WriteLine(" Дані успішно збережені в JSON файли!");
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($" Помилка експорту: {ex.Message}");
+            }
+
+            Console.ReadKey();
+        }
+
+        // ============== АУТЕНТИФІКАЦІЯ ==============
+
+        static bool AuthenticateUser()
+        {
+            while (true)
+            {
+                Console.Clear();
+                Console.WriteLine("╔══════════════════════════════════════╗");
+                Console.WriteLine("║       MATEPOST - ВХІД В СИСТЕМУ      ║");
+                Console.WriteLine("╚══════════════════════════════════════╝");
+                Console.WriteLine();
+                Console.WriteLine("1. Логін");
+                Console.WriteLine("0. Вихід");
+                Console.Write("\nОберіть опцію: ");
+
+                string choice = Console.ReadLine() ?? "";
+
+                switch (choice)
+                {
+                    case "1":
+                        if (Login())
+                            return true;
+                        break;
+                    case "0":
+                        return false;
+                }
+            }
+        }
+
+        static bool Login()
+        {
+            Console.Clear();
+            Console.WriteLine("═══ ЛОГІН ═══\n");
+            Console.ForegroundColor = ConsoleColor.Yellow;
+            Console.WriteLine("  Дефолтний адмін:");
+            Console.WriteLine("  Логін: admin");
+            Console.WriteLine("  Пароль: Admin_password1");
+            Console.ResetColor();
+            Console.WriteLine();
+
+            Console.Write("Логін: ");
+            string username = Console.ReadLine() ?? "";
+
+            Console.Write("Пароль: ");
+            string password = ReadPassword();
+
+            Console.WriteLine();
+            Console.Write(" Підключення до Security API...");
+
+            try
+            {
+                var result = _authService.LoginAsync(username, password).Result;
+
+                if (result.Success)
+                {
+                    var authData = (AuthData)result.Data;
+
+                    _currentUserToken = authData.Token; 
+                    _currentUserRole = authData.Role; 
+                    _currentUsername = username;
+
+                    Console.ForegroundColor = ConsoleColor.Green;
+                    Console.WriteLine($"\n✓ Вхід виконано!");
+                    Console.WriteLine($"  Роль: {_currentUserRole}");
+                    Console.ResetColor();
+                    Console.WriteLine("\nНатисніть будь-яку клавішу...");
+                    Console.ReadKey();
+                    return true;
+                }
+                else
+                {
+                    Console.ForegroundColor = ConsoleColor.Red;
+                    Console.WriteLine($"\n✗ Помилка входу: {result.Data}");
+                    Console.ResetColor();
+                    Console.ReadKey();
+                    return false;
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.ForegroundColor = ConsoleColor.Red;
+                Console.WriteLine("\n Помилка з'єднання з Security API!");
+                Console.WriteLine($"  {ex.Message}");
+                Console.WriteLine("\nПереконайтесь що Security API запущений:");
+                Console.WriteLine("  cd Security && dotnet run");
+                Console.ResetColor();
+                Console.ReadKey();
+                return false;
+            }
+        }
+
+        static string ReadPassword()
+        {
+            string password = "";
+            ConsoleKeyInfo key;
+
+            do
+            {
+                key = Console.ReadKey(true);
+
+                if (key.Key != ConsoleKey.Backspace && key.Key != ConsoleKey.Enter)
+                {
+                    password += key.KeyChar;
+                    Console.Write("*");
+                }
+                else if (key.Key == ConsoleKey.Backspace && password.Length > 0)
+                {
+                    password = password.Substring(0, password.Length - 1);
+                    Console.Write("\b \b");
+                }
+            } while (key.Key != ConsoleKey.Enter);
+
+            Console.WriteLine();
+            return password;
+        }
+
+        // ============== УПРАВЛІННЯ КОРИСТУВАЧАМИ ==============
+
+        static void UserManagementMenu()
+        {
+            if (_currentUserRole != "Admin")
+            {
+                Console.ForegroundColor = ConsoleColor.Red;
+                Console.WriteLine("\n Доступ заборонено! Тільки для адміністраторів.");
+                Console.ResetColor();
+                Console.ReadKey();
+                return;
+            }
+
+            while (true)
+            {
+                Console.Clear();
+                Console.WriteLine("═══ УПРАВЛІННЯ КОРИСТУВАЧАМИ ═══\n");
+                Console.WriteLine("1. Список користувачів");
+                Console.WriteLine("2. Зареєструвати нового користувача");
+                Console.WriteLine("3. Змінити роль користувача");
+                Console.WriteLine("4. Змінити свій пароль");
+                Console.WriteLine("0. Назад");
+                Console.Write("\nОберіть опцію: ");
+
+                string choice = Console.ReadLine() ?? "";
+
+                switch (choice)
+                {
+                    case "1":
+                        ListUsers();
+                        break;
+                    case "2":
+                        RegisterNewUser();
+                        break;
+                    case "3":
+                        ChangeUserRole();
+                        break;
+                    case "4":
+                        ChangePassword();
+                        break;
+                    case "0":
+                        return;
+                }
+            }
+        }
+
+        static void ListUsers()
+        {
+            Console.Clear();
+            Console.WriteLine("═══ СПИСОК КОРИСТУВАЧІВ ═══\n");
+
+            try
+            {
+                var result = _authService.GetUsersAsync(_currentUserToken).Result;
+
+                if (result.Success)
+                {
+                    var users = (UserInfo[])result.Data;
+
+                    if (users.Length == 0)
+                    {
+                        Console.WriteLine("Користувачів не знайдено.");
+                    }
+                    else
+                    {
+                        Console.WriteLine($"{"Логін",-20} {"Роль",-15}");
+                        Console.WriteLine(new string('─', 40));
+
+                        foreach (var user in users)
+                        {
+                            Console.Write($"{user.username,-20} ");
+
+                            Console.ForegroundColor = user.role switch
+                            {
+                                "Admin" => ConsoleColor.Red,
+                                "Manager" => ConsoleColor.Yellow,
+                                "Operator" => ConsoleColor.Cyan,
+                                "Client" => ConsoleColor.Green,
+                                _ => ConsoleColor.White
+                            };
+                            Console.WriteLine($"{user.role,-15}");
+                            Console.ResetColor();
+                        }
+                    }
+                }
+                else
+                {
+                    Console.ForegroundColor = ConsoleColor.Red;
+                    Console.WriteLine($" Помилка: {result.Data}");
+                    Console.ResetColor();
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.ForegroundColor = ConsoleColor.Red;
+                Console.WriteLine($" Помилка: {ex.Message}");
+                Console.ResetColor();
+            }
+
+            Console.WriteLine("\nНатисніть будь-яку клавішу...");
+            Console.ReadKey();
+        }
+
+        static void RegisterNewUser()
+        {
+            Console.Clear();
+            Console.WriteLine("═══ РЕЄСТРАЦІЯ КОРИСТУВАЧА ═══\n");
+
+            Console.Write("Логін: ");
+            string username = Console.ReadLine() ?? "";
+
+            if (string.IsNullOrWhiteSpace(username))
+            {
+                Console.ForegroundColor = ConsoleColor.Red;
+                Console.WriteLine(" Логін не може бути порожнім!");
+                Console.ResetColor();
+                Console.ReadKey();
+                return;
+            }
+
+            Console.Write("Пароль: ");
+            string password = ReadPassword();
+
+            Console.WriteLine("Роль:");
+            Console.WriteLine("1. Admin");
+            Console.WriteLine("2. Manager");
+            Console.WriteLine("3. Operator");
+            Console.WriteLine("4. Client");
+            Console.Write("Оберіть: ");
+
+            string role = Console.ReadLine() switch
+            {
+                "1" => "Admin",
+                "2" => "Manager",
+                "3" => "Operator",
+                _ => "Client"
+            };
+
+            Console.WriteLine();
+            Console.Write(" Створення користувача...");
+
+            try
+            {
+                var result = _authService.RegisterAsync(_currentUserToken, username, password, role).Result;
+
+                if (result.Success)
+                {
+                    Console.ForegroundColor = ConsoleColor.Green;
+                    Console.WriteLine($"\n {result.Data}");
+                    Console.ResetColor();
+                }
+                else
+                {
+                    Console.ForegroundColor = ConsoleColor.Red;
+                    Console.WriteLine($"\n {result.Data}");
+                    Console.ResetColor();
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.ForegroundColor = ConsoleColor.Red;
+                Console.WriteLine($"\n Помилка: {ex.Message}");
+                Console.ResetColor();
+            }
+
+            Console.WriteLine("\nНатисніть будь-яку клавішу...");
+            Console.ReadKey();
+        }
+
+        static void ChangeUserRole()
+        {
+            Console.Clear();
+            Console.WriteLine("═══ ЗМІНА РОЛІ КОРИСТУВАЧА ═══\n");
+
+            Console.Write("Логін користувача: ");
+            string username = Console.ReadLine() ?? "";
+
+            if (string.IsNullOrWhiteSpace(username))
+            {
+                Console.ForegroundColor = ConsoleColor.Red;
+                Console.WriteLine(" Логін не може бути порожнім!");
+                Console.ResetColor();
+                Console.ReadKey();
+                return;
+            }
+
+            Console.WriteLine("\nНова роль:");
+            Console.WriteLine("1. Admin");
+            Console.WriteLine("2. Manager");
+            Console.WriteLine("3. Operator");
+            Console.WriteLine("4. Client");
+            Console.Write("Оберіть: ");
+
+            string role = Console.ReadLine() switch
+            {
+                "1" => "Admin",
+                "2" => "Manager",
+                "3" => "Operator",
+                _ => "Client"
+            };
+
+            Console.WriteLine();
+            Console.Write(" Зміна ролі...");
+
+            try
+            {
+                var result = _authService.ChangeUserRoleAsync(_currentUserToken, username, role).Result;
+
+                if (result.Success)
+                {
+                    Console.ForegroundColor = ConsoleColor.Green;
+                    Console.WriteLine($"\n {result.Data}");
+                    Console.ResetColor();
+                }
+                else
+                {
+                    Console.ForegroundColor = ConsoleColor.Red;
+                    Console.WriteLine($"\n {result.Data}");
+                    Console.ResetColor();
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.ForegroundColor = ConsoleColor.Red;
+                Console.WriteLine($"\n Помилка: {ex.Message}");
+                Console.ResetColor();
+            }
+
+            Console.WriteLine("\nНатисніть будь-яку клавішу...");
+            Console.ReadKey();
+        }
+
+        static void ChangePassword()
+        {
+            Console.Clear();
+            Console.WriteLine("═══ ЗМІНА ПАРОЛЯ ═══\n");
+
+            Console.Write("Старий пароль: ");
+            string oldPassword = ReadPassword();
+
+            Console.Write("Новий пароль: ");
+            string newPassword = ReadPassword();
+
+            Console.Write("Підтвердіть новий пароль: ");
+            string confirmPassword = ReadPassword();
+
+            if (newPassword != confirmPassword)
+            {
+                Console.ForegroundColor = ConsoleColor.Red;
+                Console.WriteLine("\n Паролі не співпадають!");
+                Console.ResetColor();
+                Console.ReadKey();
+                return;
+            }
+
+            Console.WriteLine();
+            Console.Write(" Зміна пароля...");
+
+            try
+            {
+                var result = _authService.ChangePasswordAsync(_currentUserToken, oldPassword, newPassword).Result;
+
+                if (result.Success)
+                {
+                    Console.ForegroundColor = ConsoleColor.Green;
+                    Console.WriteLine($"\n {result.Data}");
+                    Console.WriteLine("\nВи будете автоматично вийшли з системи.");
+                    Console.WriteLine("Увійдіть знову з новим паролем.");
+                    Console.ResetColor();
+                    Console.ReadKey();
+
+                    Environment.Exit(0);
+                }
+                else
+                {
+                    Console.ForegroundColor = ConsoleColor.Red;
+                    Console.WriteLine($"\n {result.Data}");
+                    Console.ResetColor();
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.ForegroundColor = ConsoleColor.Red;
+                Console.WriteLine($"\n Помилка: {ex.Message}");
+                Console.ResetColor();
+            }
+
+            Console.WriteLine("\nНатисніть будь-яку клавішу...");
+            Console.ReadKey();
+        }
+
+        // ============== МЕНЮ КЛІЄНТІВ ==============
+
+        static void ClientMenu()
+        {
+            while (true)
+            {
+                Console.Clear();
+                Console.WriteLine("═══ УПРАВЛІННЯ КЛІЄНТАМИ ═══\n");
+                Console.WriteLine("1. Додати клієнта");
+                Console.WriteLine("2. Переглянути всіх клієнтів");
+                Console.WriteLine("3. Знайти клієнта");
+                Console.WriteLine("4. Оновити дані клієнта");
+                Console.WriteLine("5. Видалити клієнта");
+                Console.WriteLine("0. Назад");
+                Console.Write("\nОберіть опцію: ");
+
+                string choice = Console.ReadLine() ?? "";
+
+                switch (choice)
+                {
+                    case "1":
+                        AddClient();
+                        break;
+                    case "2":
+                        ViewAllClients();
+                        break;
+                    case "3":
+                        SearchClient();
+                        break;
+                    case "4":
+                        UpdateClient();
+                        break;
+                    case "5":
+                        DeleteClient();
+                        break;
+                    case "0":
+                        return;
+                }
             }
         }
 
         static void AddClient()
         {
             Console.Clear();
-            Console.WriteLine("=== ДОДАТИ КЛІЄНТА ===");
+            Console.WriteLine("═══ ДОДАТИ КЛІЄНТА ═══\n");
 
             Console.Write("ПІБ: ");
             string fullName = Console.ReadLine() ?? "";
@@ -201,20 +869,25 @@ namespace PresentationLayer
             if (result.Success)
             {
                 var client = (Client)result.Data;
-                Console.WriteLine($"\nКлієнта додано! ID: {client.Id}");
+                Console.ForegroundColor = ConsoleColor.Green;
+                Console.WriteLine($"\n Клієнта додано! ID: {client.Id}");
+                Console.ResetColor();
             }
             else
             {
-                Console.WriteLine("\nПомилка при додаванні клієнта!");
+                Console.ForegroundColor = ConsoleColor.Red;
+                Console.WriteLine($"\n Помилка: {result.Data}");
+                Console.ResetColor();
             }
 
+            Console.WriteLine("\nНатисніть будь-яку клавішу...");
             Console.ReadKey();
         }
 
         static void ViewAllClients()
         {
             Console.Clear();
-            Console.WriteLine("=== ВСІ КЛІЄНТИ ===\n");
+            Console.WriteLine("═══ ВСІ КЛІЄНТИ ═══\n");
 
             var clients = _clientService.GetAll();
 
@@ -226,103 +899,268 @@ namespace PresentationLayer
             {
                 foreach (var client in clients)
                 {
-                    // Динамічно отримуємо кількість посилок
                     int parcelCount = _clientService.GetClientParcelCount(client.Id);
 
-                    Console.WriteLine($"ID: {client.Id} | {client.FullName}");
-                    Console.WriteLine($"   Телефон: {client.Phone} | Email: {client.Email}");
-                    Console.WriteLine($"   Адреса: {client.Address}");
-                    Console.WriteLine($"   Тип: {client.Type} | Статус: {client.Status}");
-                    Console.WriteLine($"   Посилок: {parcelCount} | Знижка: {client.GetDiscount() * 100}%");
+                    Console.ForegroundColor = ConsoleColor.Cyan;
+                    Console.WriteLine($"╔══════════════════════════════════════════════╗");
+                    Console.WriteLine($"║   ID: {client.Id,-5} | {client.FullName,-35} ║");
+                    Console.WriteLine($"╚══════════════════════════════════════════════╝");
+                    Console.ResetColor();
+
+                    Console.WriteLine($"  Телефон: {client.Phone}");
+                    Console.WriteLine($"  Email: {client.Email}");
+                    Console.WriteLine($"  Адреса: {client.Address}");
+                    Console.WriteLine($"  Тип: {(client.Type == ClientType.Individual ? "Фізична особа" : "Організація")}");
+
+                    Console.ForegroundColor = GetLoyaltyColor(client.Status);
+                    Console.WriteLine($"   ⭐ Статус: {GetLoyaltyStatusName(client.Status)}");
+                    Console.ResetColor();
+
+                    Console.WriteLine($"  Посилок відправлено: {parcelCount}");
+                    Console.WriteLine($"  Знижка: {client.GetDiscount() * 100}%");
+                    Console.WriteLine($"  Знижка доступна: {(client.CanUseDiscount() ? "Так" : "Ні")}");
 
                     if (client.IsLegend())
                     {
-                        Console.WriteLine($"   Безкоштовна доставка: {(client.CanUseFreeDelivery() ? "Доступна" : "Використана цього року")}");
+                        Console.ForegroundColor = ConsoleColor.Yellow;
+                        Console.WriteLine($" Безкоштовна доставка: {(client.CanUseFreeDelivery() ? "Доступна" : "Використана")}");
+                        Console.ResetColor();
                     }
 
                     Console.WriteLine();
                 }
             }
 
+            Console.WriteLine("\nНатисніть будь-яку клавішу...");
             Console.ReadKey();
+        }
+
+        static ConsoleColor GetLoyaltyColor(LoyaltyStatus status)
+        {
+            return status switch
+            {
+                LoyaltyStatus.Beginner => ConsoleColor.Gray,
+                LoyaltyStatus.Active => ConsoleColor.Green,
+                LoyaltyStatus.Pro => ConsoleColor.Blue,
+                LoyaltyStatus.Legend => ConsoleColor.Yellow,
+                _ => ConsoleColor.White
+            };
+        }
+
+        static string GetLoyaltyStatusName(LoyaltyStatus status)
+        {
+            return status switch
+            {
+                LoyaltyStatus.Beginner => "Початківець",
+                LoyaltyStatus.Active => "Активний клієнт",
+                LoyaltyStatus.Pro => "Поштовий профі",
+                LoyaltyStatus.Legend => "Легенда доставки",
+                _ => "Невідомо"
+            };
         }
 
         static void SearchClient()
         {
             Console.Clear();
-            Console.Write("Введіть пошуковий запит: ");
+            Console.WriteLine("═══ ПОШУК КЛІЄНТА ═══\n");
+            Console.Write("Введіть пошуковий запит (ПІБ/телефон/email/адреса): ");
             string query = Console.ReadLine() ?? "";
 
             var clients = _clientService.Search(query);
 
-            Console.WriteLine($"\nЗнайдено клієнтів: {clients.Count}\n");
+            Console.WriteLine($"\n Знайдено клієнтів: {clients.Count}\n");
 
-            foreach (var client in clients)
+            if (clients.Count == 0)
             {
-                Console.WriteLine($"ID: {client.Id} | {client.FullName} | {client.Phone}");
+                Console.WriteLine("Нічого не знайдено.");
+            }
+            else
+            {
+                foreach (var client in clients)
+                {
+                    Console.ForegroundColor = ConsoleColor.Cyan;
+                    Console.WriteLine($"ID: {client.Id} | {client.FullName}");
+                    Console.ResetColor();
+                    Console.WriteLine($"  {client.Phone} | {client.Email}");
+                    Console.WriteLine($"  {GetLoyaltyStatusName(client.Status)}");
+                    Console.WriteLine();
+                }
             }
 
+            Console.WriteLine("Натисніть будь-яку клавішу...");
+            Console.ReadKey();
+        }
+
+        static void UpdateClient()
+        {
+            Console.Clear();
+            Console.WriteLine("═══ ОНОВИТИ ДАНІ КЛІЄНТА ═══\n");
+            Console.Write("Введіть ID клієнта: ");
+
+            if (!int.TryParse(Console.ReadLine(), out int id))
+            {
+                Console.WriteLine(" Невірний ID!");
+                Console.ReadKey();
+                return;
+            }
+
+            var client = _clientService.GetById(id);
+            if (client == null)
+            {
+                Console.WriteLine(" Клієнта не знайдено!");
+                Console.ReadKey();
+                return;
+            }
+
+            Console.WriteLine($"\nПоточні дані:");
+            Console.WriteLine($"ПІБ: {client.FullName}");
+            Console.WriteLine($"Телефон: {client.Phone}");
+            Console.WriteLine($"Email: {client.Email}");
+            Console.WriteLine($"Адреса: {client.Address}");
+
+            Console.Write("\nНове ПІБ (Enter - залишити без змін): ");
+            string newName = Console.ReadLine();
+            if (!string.IsNullOrWhiteSpace(newName))
+                client.FullName = newName;
+
+            Console.Write("Новий телефон (Enter - залишити без змін): ");
+            string newPhone = Console.ReadLine();
+            if (!string.IsNullOrWhiteSpace(newPhone))
+                client.Phone = newPhone;
+
+            Console.Write("Новий email (Enter - залишити без змін): ");
+            string newEmail = Console.ReadLine();
+            if (!string.IsNullOrWhiteSpace(newEmail))
+                client.Email = newEmail;
+
+            Console.Write("Нова адреса (Enter - залишити без змін): ");
+            string newAddress = Console.ReadLine();
+            if (!string.IsNullOrWhiteSpace(newAddress))
+                client.Address = newAddress;
+
+            var result = _clientService.Update(client);
+
+            if (result.Success)
+            {
+                Console.ForegroundColor = ConsoleColor.Green;
+                Console.WriteLine("\n Дані клієнта оновлено!");
+                Console.ResetColor();
+            }
+            else
+            {
+                Console.ForegroundColor = ConsoleColor.Red;
+                Console.WriteLine($"\n Помилка: {result.Data}");
+                Console.ResetColor();
+            }
+
+            Console.WriteLine("\nНатисніть будь-яку клавішу...");
             Console.ReadKey();
         }
 
         static void DeleteClient()
         {
             Console.Clear();
+            Console.WriteLine("═══ ВИДАЛИТИ КЛІЄНТА ═══\n");
             Console.Write("Введіть ID клієнта для видалення: ");
+
             if (int.TryParse(Console.ReadLine(), out int id))
             {
-                var result = _clientService.Delete(id);
-                Console.WriteLine(result.Success ? "Клієнта видалено!" : "Клієнта не знайдено!");
+                var client = _clientService.GetById(id);
+                if (client != null)
+                {
+                    Console.WriteLine($"\nКлієнт: {client.FullName}");
+                    Console.ForegroundColor = ConsoleColor.Yellow;
+                    Console.Write("\n Ви впевнені? (y/n): ");
+                    Console.ResetColor();
+
+                    if (Console.ReadLine()?.ToLower() == "y")
+                    {
+                        var result = _clientService.Delete(id);
+
+                        if (result.Success)
+                        {
+                            Console.ForegroundColor = ConsoleColor.Green;
+                            Console.WriteLine(" Клієнта видалено!");
+                            Console.ResetColor();
+                        }
+                        else
+                        {
+                            Console.ForegroundColor = ConsoleColor.Red;
+                            Console.WriteLine(" Помилка при видаленні!");
+                            Console.ResetColor();
+                        }
+                    }
+                    else
+                    {
+                        Console.WriteLine("Операцію скасовано.");
+                    }
+                }
+                else
+                {
+                    Console.WriteLine(" Клієнта не знайдено!");
+                }
             }
+            else
+            {
+                Console.WriteLine(" Невірний ID!");
+            }
+
             Console.ReadKey();
         }
 
+        // ============== МЕНЮ ПОСИЛОК ==============
+
         static void ParcelMenu()
         {
-            Console.Clear();
-            Console.WriteLine("=== УПРАВЛІННЯ ПОСИЛКАМИ ===");
-            Console.WriteLine("1. Створити посилку");
-            Console.WriteLine("2. Переглянути всі посилки");
-            Console.WriteLine("3. Розширений пошук посилок");
-            Console.WriteLine("4. Відстежити посилку за трекінг-номером");
-            Console.WriteLine("5. Змінити статус посилки");
-            Console.WriteLine("6. Розрахувати вартість доставки");
-            Console.WriteLine("7. Симулювати затримку");
-            Console.WriteLine("0. Назад");
-            Console.Write("\nОберіть опцію: ");
-
-            string choice = Console.ReadLine() ?? "";
-
-            switch (choice)
+            while (true)
             {
-                case "1":
-                    CreateParcel();
-                    break;
-                case "2":
-                    ViewAllParcels();
-                    break;
-                case "3":
-                    AdvancedSearchParcels();
-                    break;
-                case "4":
-                    TrackParcel();
-                    break;
-                case "5":
-                    ChangeParcelStatus();
-                    break;
-                case "6":
-                    CalculateDeliveryCost();
-                    break;
-                case "7":
-                    SimulateDelay();
-                    break;
+                Console.Clear();
+                Console.WriteLine("═══ УПРАВЛІННЯ ПОСИЛКАМИ ═══\n");
+                Console.WriteLine("1. Створити посилку");
+                Console.WriteLine("2. Переглянути всі посилки");
+                Console.WriteLine("3. Розширений пошук");
+                Console.WriteLine("4. Відстежити посилку");
+                Console.WriteLine("5. Змінити статус");
+                Console.WriteLine("6. Розрахувати вартість");
+                Console.WriteLine("7. Симулювати затримку");
+                Console.WriteLine("0. Назад");
+                Console.Write("\nОберіть опцію: ");
+
+                string choice = Console.ReadLine() ?? "";
+
+                switch (choice)
+                {
+                    case "1":
+                        CreateParcel();
+                        break;
+                    case "2":
+                        ViewAllParcels();
+                        break;
+                    case "3":
+                        AdvancedSearchParcels();
+                        break;
+                    case "4":
+                        TrackParcel();
+                        break;
+                    case "5":
+                        ChangeParcelStatus();
+                        break;
+                    case "6":
+                        CalculateDeliveryCost();
+                        break;
+                    case "7":
+                        SimulateDelay();
+                        break;
+                    case "0":
+                        return;
+                }
             }
         }
 
         static void CreateParcel()
         {
             Console.Clear();
-            Console.WriteLine("=== СТВОРИТИ ПОСИЛКУ ===");
+            Console.WriteLine("═══ СТВОРИТИ ПОСИЛКУ ═══\n");
 
             Console.Write("ID відправника: ");
             if (!int.TryParse(Console.ReadLine(), out int senderId)) return;
@@ -404,20 +1242,10 @@ namespace PresentationLayer
                 decimal.TryParse(Console.ReadLine(), out insuranceValue);
             }
 
-            Console.Write("\nЧи містить посилка небезпечні матеріали? (y/n): ");
-            bool isDangerous = Console.ReadLine()?.ToLower() == "y";
-
-            if (isDangerous && type == ParcelType.International)
-            {
-                Console.WriteLine("\nМіжнародне відправлення небезпечних вантажів заборонено!");
-                Console.ReadKey();
-                return;
-            }
-
             bool useFreeDelivery = false;
             if (sender.IsLegend() && sender.CanUseFreeDelivery())
             {
-                Console.WriteLine("\nВи - Легенда Доставки!");
+                Console.WriteLine("\n Ви - Легенда Доставки!");
                 Console.Write("Бажаєте використати безкоштовну доставку (1 раз на рік)? (y/n): ");
                 if (Console.ReadLine()?.ToLower() == "y")
                 {
@@ -432,37 +1260,33 @@ namespace PresentationLayer
             if (result.Success)
             {
                 var parcel = (Parcel)result.Data;
-                Console.WriteLine($"\nПосилку створено!");
+                Console.ForegroundColor = ConsoleColor.Green;
+                Console.WriteLine($"\n Посилку створено!");
                 Console.WriteLine($"Трекінг-номер: {parcel.TrackingNumber}");
-                Console.WriteLine($"Орієнтовний термін доставки: {parcel.EstimatedDeliveryDays} днів");
+                Console.WriteLine($"Орієнтовний термін: {parcel.EstimatedDeliveryDays} днів");
+                Console.ResetColor();
 
                 if (parcel.IsPriorityProcessing)
-                {
-                    Console.WriteLine("Пріоритетна обробка активована (Легенда)");
-                }
-
-                if (parcel.IsFreeDelivery)
-                {
-                    Console.WriteLine("Безкоштовна доставка застосована!");
-                }
+                    Console.WriteLine(" Пріоритетна обробка активована");
 
                 if (parcel.RequiresOperatorConfirmation())
-                {
-                    Console.WriteLine("Увага! Посилка потребує підтвердження оператора (вартість > 5000 грн)");
-                }
+                    Console.WriteLine("  Потребує підтвердження оператора (>5000 грн)");
             }
             else
             {
-                Console.WriteLine($"\nПомилка: {result.Data}");
+                Console.ForegroundColor = ConsoleColor.Red;
+                Console.WriteLine($"\n Помилка: {result.Data}");
+                Console.ResetColor();
             }
 
+            Console.WriteLine("\nНатисніть будь-яку клавішу...");
             Console.ReadKey();
         }
 
         static void ViewAllParcels()
         {
             Console.Clear();
-            Console.WriteLine("=== ВСІ ПОСИЛКИ ===\n");
+            Console.WriteLine("═══ ВСІ ПОСИЛКИ ═══\n");
 
             var parcels = _parcelService.GetAll();
 
@@ -474,39 +1298,96 @@ namespace PresentationLayer
             {
                 foreach (var parcel in parcels)
                 {
-                    var sender = _clientService.GetById(parcel.SenderId);
-                    var receiver = _clientService.GetById(parcel.ReceiverId);
-
-                    Console.WriteLine($"Трекінг: {parcel.TrackingNumber}");
-                    Console.WriteLine($"   Відправник: {sender?.FullName ?? "N/A"}");
-                    Console.WriteLine($"   Одержувач: {receiver?.FullName ?? "N/A"}");
-                    Console.WriteLine($"   Статус: {parcel.CurrentStatus}");
-                    Console.WriteLine($"   Тип: {parcel.Type} | Вага: {parcel.Weight} кг");
-                    Console.WriteLine($"   Вартість: {parcel.DeclaredValue} грн");
-                    Console.WriteLine($"   Служба: {parcel.Service} | Доставка: {parcel.DeliveryType}");
-                    Console.WriteLine($"   Створено: {parcel.CreatedAt:dd.MM.yyyy HH:mm}");
-
-                    if (parcel.IsPriorityProcessing)
-                        Console.WriteLine("   Пріоритетна обробка");
-                    if (parcel.IsFreeDelivery)
-                        Console.WriteLine("   Безкоштовна доставка");
-
-                    Console.WriteLine();
+                    DisplayParcelInfo(parcel);
                 }
             }
 
+            Console.WriteLine("\nНатисніть будь-яку клавішу...");
             Console.ReadKey();
+        }
+
+        static void DisplayParcelInfo(Parcel parcel)
+        {
+            var sender = _clientService.GetById(parcel.SenderId);
+            var receiver = _clientService.GetById(parcel.ReceiverId);
+
+            Console.ForegroundColor = ConsoleColor.Cyan;
+            Console.WriteLine($"╔══════════════════════════════════════════════╗");
+            Console.WriteLine($"║          {parcel.TrackingNumber,-39}         ║");
+            Console.WriteLine($"╚══════════════════════════════════════════════╝");
+            Console.ResetColor();
+
+            Console.WriteLine($"  Відправник: {sender?.FullName ?? "N/A"}");
+            Console.WriteLine($"  Одержувач: {receiver?.FullName ?? "N/A"}");
+
+            Console.ForegroundColor = GetStatusColor(parcel.CurrentStatus);
+            Console.WriteLine($"  Статус: {GetStatusName(parcel.CurrentStatus)}");
+            Console.ResetColor();
+
+            Console.WriteLine($"  Тип: {(parcel.Type == ParcelType.Local ? "Локальна" : "Міжнародна")}");
+            Console.WriteLine($"  Вага: {parcel.Weight} кг | 💰 Вартість: {parcel.DeclaredValue} грн");
+            Console.WriteLine($"  {parcel.Service} | 📍 {GetDeliveryTypeName(parcel.DeliveryType)}");
+            Console.WriteLine($"  {parcel.CreatedAt:dd.MM.yyyy HH:mm} | ⏱️  {parcel.EstimatedDeliveryDays} днів");
+
+            if (parcel.IsPriorityProcessing)
+                Console.WriteLine("   ⭐ Пріоритетна обробка");
+            if (parcel.IsFreeDelivery)
+                Console.WriteLine("  Безкоштовна доставка");
+            if (parcel.IsInsured)
+                Console.WriteLine($"  Застраховано: {parcel.InsuranceValue} грн");
+
+            Console.WriteLine();
+        }
+
+        static ConsoleColor GetStatusColor(ParcelStatus status)
+        {
+            return status switch
+            {
+                ParcelStatus.AwaitingShipment => ConsoleColor.Gray,
+                ParcelStatus.AcceptedByOperator => ConsoleColor.Cyan,
+                ParcelStatus.InTransit => ConsoleColor.Blue,
+                ParcelStatus.AtWarehouse => ConsoleColor.Magenta,
+                ParcelStatus.Delivered => ConsoleColor.Green,
+                ParcelStatus.Lost => ConsoleColor.Red,
+                _ => ConsoleColor.White
+            };
+        }
+
+        static string GetStatusName(ParcelStatus status)
+        {
+            return status switch
+            {
+                ParcelStatus.AwaitingShipment => "Очікує відправки",
+                ParcelStatus.AcceptedByOperator => "Прийнято оператором",
+                ParcelStatus.InTransit => "В дорозі",
+                ParcelStatus.AtWarehouse => "На складі",
+                ParcelStatus.Delivered => "Доставлено",
+                ParcelStatus.Lost => "Втрачено",
+                _ => "Невідомо"
+            };
+        }
+
+        static string GetDeliveryTypeName(DeliveryType type)
+        {
+            return type switch
+            {
+                DeliveryType.Office => "Відділення",
+                DeliveryType.Parcelbox => "Поштомат",
+                DeliveryType.Address => "Адресна",
+                DeliveryType.Taxi => "Таксі",
+                _ => "Невідомо"
+            };
         }
 
         static void AdvancedSearchParcels()
         {
             Console.Clear();
-            Console.WriteLine("=== РОЗШИРЕНИЙ ПОШУК ПОСИЛОК ===");
+            Console.WriteLine("═══ РОЗШИРЕНИЙ ПОШУК ПОСИЛОК ═══\n");
             Console.WriteLine("1. Пошук за трекінг-номером");
-            Console.WriteLine("2. Пошук за клієнтом (ПІБ/телефон)");
+            Console.WriteLine("2. Пошук за клієнтом");
             Console.WriteLine("3. Пошук за статусом");
-            Console.WriteLine("4. Пошук за датою створення");
-            Console.Write("\nОберіть спосіб пошуку: ");
+            Console.WriteLine("4. Пошук за датою");
+            Console.Write("\nОберіть: ");
 
             string choice = Console.ReadLine() ?? "";
             List<Parcel> results = new List<Parcel>();
@@ -514,21 +1395,18 @@ namespace PresentationLayer
             switch (choice)
             {
                 case "1":
-                    Console.Write("Введіть трекінг-номер: ");
-                    string tracking = Console.ReadLine() ?? "";
-                    results = _parcelService.Search(query: tracking);
+                    Console.Write("Трекінг-номер: ");
+                    results = _parcelService.Search(query: Console.ReadLine());
                     break;
 
                 case "2":
-                    Console.Write("Введіть ПІБ або телефон клієнта: ");
-                    string clientQuery = Console.ReadLine() ?? "";
-                    results = _parcelService.Search(query: clientQuery);
+                    Console.Write("ПІБ/телефон клієнта: ");
+                    results = _parcelService.Search(query: Console.ReadLine());
                     break;
 
                 case "3":
-                    Console.WriteLine("\nОберіть статус:");
-                    Console.WriteLine("1. Очікує відправки");
-                    Console.WriteLine("2. Прийнято оператором");
+                    Console.WriteLine("\n1. Очікує відправки");
+                    Console.WriteLine("2. Прийнято");
                     Console.WriteLine("3. В дорозі");
                     Console.WriteLine("4. На складі");
                     Console.WriteLine("5. Доставлено");
@@ -551,34 +1429,27 @@ namespace PresentationLayer
                     break;
 
                 case "4":
-                    Console.Write("Введіть дату (dd.MM.yyyy): ");
-                    if (DateTime.TryParse(Console.ReadLine(), out DateTime searchDate))
-                    {
-                        results = _parcelService.Search(date: searchDate);
-                    }
+                    Console.Write("Дата (dd.MM.yyyy): ");
+                    if (DateTime.TryParse(Console.ReadLine(), out DateTime date))
+                        results = _parcelService.Search(date: date);
                     break;
             }
 
-            Console.WriteLine($"\n=== РЕЗУЛЬТАТИ ПОШУКУ ({results.Count}) ===\n");
+            Console.WriteLine($"\n═══ РЕЗУЛЬТАТИ ({results.Count}) ═══\n");
 
             foreach (var parcel in results)
             {
-                var sender = _clientService.GetById(parcel.SenderId);
-                var receiver = _clientService.GetById(parcel.ReceiverId);
-
-                Console.WriteLine($"Трекінг: {parcel.TrackingNumber} | Статус: {parcel.CurrentStatus}");
-                Console.WriteLine($"   {sender?.FullName} → {receiver?.FullName}");
-                Console.WriteLine($"   Дата: {parcel.CreatedAt:dd.MM.yyyy HH:mm}");
-                Console.WriteLine();
+                DisplayParcelInfo(parcel);
             }
 
+            Console.WriteLine("Натисніть будь-яку клавішу...");
             Console.ReadKey();
         }
 
         static void TrackParcel()
         {
             Console.Clear();
-            Console.Write("Введіть трекінг-номер: ");
+            Console.Write("Трекінг-номер: ");
             string trackingNumber = Console.ReadLine();
 
             var parcel = _parcelService.GetByTrackingNumber(trackingNumber);
@@ -589,39 +1460,36 @@ namespace PresentationLayer
             }
             else
             {
-                Console.WriteLine($"\n=== ПОСИЛКА {parcel.TrackingNumber} ===");
-                Console.WriteLine($"Поточний статус: {parcel.CurrentStatus}");
-                Console.WriteLine($"Орієнтовний термін: {parcel.EstimatedDeliveryDays} днів");
+                DisplayParcelInfo(parcel);
 
-                Console.WriteLine("\n--- Історія статусів ---");
+                Console.WriteLine("--- ІСТОРІЯ СТАТУСІВ ---");
                 foreach (var status in parcel.StatusHistory)
                 {
-                    Console.WriteLine($"{status.Timestamp:dd.MM.yyyy HH:mm} - {status.Status}");
+                    Console.WriteLine($"{status.Timestamp:dd.MM.yyyy HH:mm} - {GetStatusName(status.Status)}");
                     if (!string.IsNullOrEmpty(status.Note))
-                        Console.WriteLine($"   Примітка: {status.Note}");
+                        Console.WriteLine($" {status.Note}");
                 }
 
-                if (parcel.Notifications.Count > 0)
+                if (parcel.Notifications.Any())
                 {
-                    Console.WriteLine("\n--- Повідомлення ---");
+                    Console.WriteLine("\n--- ПОВІДОМЛЕННЯ ---");
                     foreach (var notif in parcel.Notifications)
                     {
-                        Console.WriteLine($"{notif.Timestamp:dd.MM.yyyy HH:mm} - {notif.Status}");
+                        Console.WriteLine($"{notif.Timestamp:dd.MM.yyyy HH:mm} - {GetStatusName(notif.Status)}");
                         if (notif.DelayReason.HasValue)
-                        {
-                            Console.WriteLine($"   Затримка: {notif.DelayReason} (+{notif.DelayDays} днів)");
-                        }
+                            Console.WriteLine($"  Затримка: {notif.DelayReason} (+{notif.DelayDays} днів)");
                     }
                 }
             }
 
+            Console.WriteLine("\nНатисніть будь-яку клавішу...");
             Console.ReadKey();
         }
 
         static void ChangeParcelStatus()
         {
             Console.Clear();
-            Console.Write("Трекінг-номер посилки: ");
+            Console.Write("Трекінг-номер: ");
             string trackingNumber = Console.ReadLine() ?? "";
 
             var parcel = _parcelService.GetByTrackingNumber(trackingNumber);
@@ -632,8 +1500,8 @@ namespace PresentationLayer
                 return;
             }
 
-            Console.WriteLine($"\nПоточний статус: {parcel.CurrentStatus}");
-            Console.WriteLine("\nОберіть новий статус:");
+            Console.WriteLine($"\nПоточний статус: {GetStatusName(parcel.CurrentStatus)}");
+            Console.WriteLine("\nНовий статус:");
             Console.WriteLine("1. Очікує відправки");
             Console.WriteLine("2. Прийнято оператором");
             Console.WriteLine("3. В дорозі");
@@ -652,14 +1520,13 @@ namespace PresentationLayer
                 _ => ParcelStatus.AwaitingShipment
             };
 
-            Console.Write("Примітка (необов'язково): ");
+            Console.Write("Примітка (Enter - пропустити): ");
             string note = Console.ReadLine();
 
             int? operatorId = null;
             if (newStatus == ParcelStatus.AcceptedByOperator && parcel.RequiresOperatorConfirmation())
             {
-                Console.WriteLine("\nЦя посилка потребує підтвердження оператора (вартість > 5000 грн)");
-                Console.Write("ID оператора: ");
+                Console.Write("\nID оператора (обов'язково для >5000 грн): ");
                 if (int.TryParse(Console.ReadLine(), out int opId))
                 {
                     var op = _operatorService.GetById(opId);
@@ -681,11 +1548,15 @@ namespace PresentationLayer
 
             if (result.Success)
             {
-                Console.WriteLine("\nСтатус оновлено!");
+                Console.ForegroundColor = ConsoleColor.Green;
+                Console.WriteLine("\n✓ Статус оновлено!");
+                Console.ResetColor();
             }
             else
             {
-                Console.WriteLine($"\nПомилка: {result.Data}");
+                Console.ForegroundColor = ConsoleColor.Red;
+                Console.WriteLine($"\n✗ {result.Data}");
+                Console.ResetColor();
             }
 
             Console.ReadKey();
@@ -694,7 +1565,7 @@ namespace PresentationLayer
         static void CalculateDeliveryCost()
         {
             Console.Clear();
-            Console.Write("Трекінг-номер посилки: ");
+            Console.Write("Трекінг-номер: ");
             string trackingNumber = Console.ReadLine();
 
             var parcel = _parcelService.GetByTrackingNumber(trackingNumber);
@@ -709,8 +1580,7 @@ namespace PresentationLayer
 
             if (parcel.IsFreeDelivery)
             {
-                Console.WriteLine($"\n=== РОЗРАХУНОК ВАРТОСТІ ===");
-                Console.WriteLine("Безкоштовна доставка застосована!");
+                Console.WriteLine("\n Безкоштовна доставка застосована!");
                 Console.WriteLine("Вартість: 0 грн");
                 Console.ReadKey();
                 return;
@@ -718,24 +1588,24 @@ namespace PresentationLayer
 
             decimal deliveryCost = _calculationService.CalculateDeliveryCost(parcel);
             decimal tax = _calculationService.CalculateImportTax(parcel);
-            decimal totalWithoutDiscount = deliveryCost + tax;
+            decimal total = deliveryCost + tax;
 
-            Console.WriteLine($"\n=== РОЗРАХУНОК ВАРТОСТІ ===");
-            Console.WriteLine($"Вартість доставки: {deliveryCost} грн");
+            Console.WriteLine("\n═══ РОЗРАХУНОК ВАРТОСТІ ═══");
+            Console.WriteLine($"Вартість доставки: {deliveryCost:F2} грн");
             if (tax > 0)
-                Console.WriteLine($"Податок (>150 EUR): {tax} грн");
-            Console.WriteLine($"Разом: {totalWithoutDiscount} грн");
+                Console.WriteLine($"Податок (>150 EUR): {tax:F2} грн");
+            Console.WriteLine($"Разом: {total:F2} грн");
 
             Console.WriteLine($"\n--- ІНФОРМАЦІЯ ПРО КЛІЄНТА ---");
-            Console.WriteLine($"Статус: {sender.Status}");
+            Console.WriteLine($"Статус: {GetLoyaltyStatusName(sender.Status)}");
             Console.WriteLine($"Доступна знижка: {sender.GetDiscount() * 100}%");
 
             if (sender.IsLegend() && IsHolidayPeriod())
             {
-                Console.WriteLine("Святковий період - знижка 35% для Легенди!");
+                Console.WriteLine(" Святковий період - знижка 35% для Легенди!");
             }
 
-            Console.WriteLine($"Можна використати знижку: {(sender.CanUseDiscount() ? "Так" : "Ні (вже використана цього місяця)")}");
+            Console.WriteLine($"Можна використати знижку: {(sender.CanUseDiscount() ? "Так" : "Ні (використана цього місяця)")}");
 
             bool useDiscount = false;
             if (sender.CanUseDiscount())
@@ -749,16 +1619,16 @@ namespace PresentationLayer
             if (useDiscount && sender.CanUseDiscount())
             {
                 sender.UseDiscount();
-
-                Console.WriteLine($"\nВартість зі знижкою: {finalPrice} грн");
-                Console.WriteLine($"Заощаджено: {totalWithoutDiscount - finalPrice} грн");
-                Console.WriteLine("Знижка застосована!");
+                Console.WriteLine($"\nВартість зі знижкою: {finalPrice:F2} грн");
+                Console.WriteLine($"Заощаджено: {total - finalPrice:F2} грн");
+                Console.WriteLine(" Знижка застосована!");
             }
             else
             {
-                Console.WriteLine($"\nКінцева вартість: {finalPrice} грн");
+                Console.WriteLine($"\nКінцева вартість: {finalPrice:F2} грн");
             }
 
+            Console.WriteLine("\nНатисніть будь-яку клавішу...");
             Console.ReadKey();
         }
 
@@ -774,7 +1644,7 @@ namespace PresentationLayer
         static void SimulateDelay()
         {
             Console.Clear();
-            Console.Write("Трекінг-номер посилки: ");
+            Console.Write("Трекінг-номер: ");
             string trackingNumber = Console.ReadLine();
 
             var result = _parcelService.SimulateDelay(trackingNumber);
@@ -785,64 +1655,122 @@ namespace PresentationLayer
 
                 if (data.HasDelay)
                 {
-                    Console.WriteLine($"\nВиникла затримка!");
-                    Console.WriteLine($"Причина: {data.Reason}");
+                    Console.ForegroundColor = ConsoleColor.Yellow;
+                    Console.WriteLine("\n  Виникла затримка!");
+                    Console.WriteLine($"Причина: {GetDelayReasonName(data.Reason.Value)}");
                     Console.WriteLine($"Затримка: +{data.DelayDays} днів");
-                    Console.WriteLine($"Новий термін доставки: {data.NewEstimate} днів");
+                    Console.WriteLine($"Новий термін: {data.NewEstimate} днів");
+                    Console.ResetColor();
                 }
                 else
                 {
-                    Console.WriteLine("\nЗатримок немає!");
+                    Console.ForegroundColor = ConsoleColor.Green;
+                    Console.WriteLine("\n Затримок немає!");
+                    Console.ResetColor();
                 }
             }
             else
             {
-                Console.WriteLine($"\n{result.Data}");
+                Console.ForegroundColor = ConsoleColor.Red;
+                Console.WriteLine($"\n {result.Data}");
+                Console.ResetColor();
             }
 
+            Console.WriteLine("\nНатисніть будь-яку клавішу...");
             Console.ReadKey();
         }
 
+        static string GetDelayReasonName(DelayReason reason)
+        {
+            return reason switch
+            {
+                DelayReason.Holiday => "Святковий день",
+                DelayReason.Accident => "Аварія на транспорті",
+                DelayReason.BorderDelay => "Затримка на кордоні",
+                DelayReason.TransportBreakdown => "Поломка транспорту",
+                DelayReason.BadWeather => "Погані погодні умови",
+                DelayReason.CustomsInspection => "Митна перевірка",
+                _ => "Невідома причина"
+            };
+        }
+
+        // ============== МЕНЮ ОПЕРАТОРІВ ==============
+
         static void OperatorMenu()
         {
-            Console.Clear();
-            Console.WriteLine("=== УПРАВЛІННЯ ОПЕРАТОРАМИ ===");
-            Console.WriteLine("1. Додати оператора");
-            Console.WriteLine("2. Переглянути всіх операторів");
-            Console.WriteLine("3. Видалити оператора");
-            Console.WriteLine("0. Назад");
-            Console.Write("\nОберіть опцію: ");
-
-            string choice = Console.ReadLine();
-
-            switch (choice)
+            while (true)
             {
-                case "1":
-                    Console.Write("Ім'я оператора: ");
-                    string name = Console.ReadLine();
-                    var result = _operatorService.Add(name);
-                    Console.WriteLine(result.Success ? "Оператора додано!" : "Помилка!");
-                    Console.ReadKey();
-                    break;
-                case "2":
-                    ViewAllOperators();
-                    break;
-                case "3":
-                    Console.Write("ID оператора: ");
-                    if (int.TryParse(Console.ReadLine(), out int id))
-                    {
-                        var del = _operatorService.Delete(id);
-                        Console.WriteLine(del.Success ? "Оператора видалено!" : "Помилка!");
-                    }
-                    Console.ReadKey();
-                    break;
+                Console.Clear();
+                Console.WriteLine("═══ УПРАВЛІННЯ ОПЕРАТОРАМИ ═══\n");
+                Console.WriteLine("1. Додати оператора");
+                Console.WriteLine("2. Переглянути всіх операторів");
+                Console.WriteLine("3. Статистика оператора");
+                Console.WriteLine("4. Видалити оператора");
+                Console.WriteLine("0. Назад");
+                Console.Write("\nОберіть опцію: ");
+
+                string choice = Console.ReadLine() ?? "";
+
+                switch (choice)
+                {
+                    case "1":
+                        AddOperator();
+                        break;
+                    case "2":
+                        ViewAllOperators();
+                        break;
+                    case "3":
+                        ViewOperatorStatistics();
+                        break;
+                    case "4":
+                        DeleteOperator();
+                        break;
+                    case "0":
+                        return;
+                }
             }
+        }
+
+        static void AddOperator()
+        {
+            Console.Clear();
+            Console.WriteLine("═══ ДОДАТИ ОПЕРАТОРА ═══\n");
+            Console.Write("Ім'я оператора: ");
+            string name = Console.ReadLine() ?? "";
+
+            if (string.IsNullOrWhiteSpace(name))
+            {
+                Console.ForegroundColor = ConsoleColor.Red;
+                Console.WriteLine(" Ім'я не може бути порожнім!");
+                Console.ResetColor();
+                Console.ReadKey();
+                return;
+            }
+
+            var result = _operatorService.Add(name);
+
+            if (result.Success)
+            {
+                var op = (Operator)result.Data;
+                Console.ForegroundColor = ConsoleColor.Green;
+                Console.WriteLine($"\n Оператора додано! ID: {op.Id}");
+                Console.ResetColor();
+            }
+            else
+            {
+                Console.ForegroundColor = ConsoleColor.Red;
+                Console.WriteLine($"\n Помилка: {result.Data}");
+                Console.ResetColor();
+            }
+
+            Console.WriteLine("\nНатисніть будь-яку клавішу...");
+            Console.ReadKey();
         }
 
         static void ViewAllOperators()
         {
             Console.Clear();
-            Console.WriteLine("=== ВСІ ОПЕРАТОРИ ===\n");
+            Console.WriteLine("═══ ВСІ ОПЕРАТОРИ ═══\n");
 
             var operators = _operatorService.GetAll();
 
@@ -854,58 +1782,182 @@ namespace PresentationLayer
             {
                 foreach (var op in operators)
                 {
-                    Console.WriteLine($"ID: {op.Id} | {op.Name}");
-                    Console.WriteLine($"   Оброблено посилок: {op.ProcessedParcels}");
-                    Console.WriteLine($"   Ефективність: {op.Efficiency}%");
+                    Console.ForegroundColor = ConsoleColor.Cyan;
+                    Console.WriteLine($"╔═══════════════════════════════════════╗");
+                    Console.WriteLine($"║      ID: {op.Id,-3} | {op.Name,-28}   ║");
+                    Console.WriteLine($"╚═══════════════════════════════════════╝");
+                    Console.ResetColor();
+
+                    Console.WriteLine($"    Оброблено посилок: {op.ProcessedParcels}");
+
+                    Console.ForegroundColor = GetEfficiencyColor(op.Efficiency);
+                    Console.WriteLine($"    Ефективність: {op.Efficiency:F1}%");
+                    Console.ResetColor();
+
                     Console.WriteLine();
                 }
+            }
+
+            Console.WriteLine("Натисніть будь-яку клавішу...");
+            Console.ReadKey();
+        }
+
+        static ConsoleColor GetEfficiencyColor(double efficiency)
+        {
+            return efficiency switch
+            {
+                >= 90 => ConsoleColor.Green,
+                >= 70 => ConsoleColor.Yellow,
+                >= 50 => ConsoleColor.DarkYellow,
+                _ => ConsoleColor.Red
+            };
+        }
+
+        static void ViewOperatorStatistics()
+        {
+            Console.Clear();
+            Console.WriteLine("═══ СТАТИСТИКА ОПЕРАТОРА ═══\n");
+            Console.Write("ID оператора: ");
+
+            if (!int.TryParse(Console.ReadLine(), out int id))
+            {
+                Console.WriteLine(" Невірний ID!");
+                Console.ReadKey();
+                return;
+            }
+
+            var op = _operatorService.GetById(id);
+            if (op == null)
+            {
+                Console.WriteLine(" Оператора не знайдено!");
+                Console.ReadKey();
+                return;
+            }
+
+            Console.WriteLine($"\n╔═══════════════════════════════════════╗");
+            Console.WriteLine($"║              {op.Name,-37}              ║");
+            Console.WriteLine($"╚═══════════════════════════════════════╝\n");
+
+            Console.WriteLine($" Всього оброблено посилок: {op.ProcessedParcels}");
+            Console.WriteLine($" Ефективність: {op.Efficiency:F1}%");
+
+            // Підрахунок посилок, оброблених цим оператором
+            var parcels = _parcelService.GetAll()
+                .Where(p => p.CurrentStatus == ParcelStatus.AcceptedByOperator ||
+                           p.StatusHistory.Any(s => s.Status == ParcelStatus.AcceptedByOperator))
+                .ToList();
+
+            var todayParcels = parcels.Where(p => p.CreatedAt.Date == DateTime.Today).Count();
+            var weekParcels = parcels.Where(p => p.CreatedAt >= DateTime.Today.AddDays(-7)).Count();
+            var monthParcels = parcels.Where(p => p.CreatedAt >= DateTime.Today.AddMonths(-1)).Count();
+
+            Console.WriteLine($"\n Статистика обробки:");
+            Console.WriteLine($"   Сьогодні: {todayParcels}");
+            Console.WriteLine($"   За тиждень: {weekParcels}");
+            Console.WriteLine($"   За місяць: {monthParcels}");
+
+            Console.WriteLine("\nНатисніть будь-яку клавішу...");
+            Console.ReadKey();
+        }
+
+        static void DeleteOperator()
+        {
+            Console.Clear();
+            Console.WriteLine("═══ ВИДАЛИТИ ОПЕРАТОРА ═══\n");
+            Console.Write("ID оператора: ");
+
+            if (int.TryParse(Console.ReadLine(), out int id))
+            {
+                var op = _operatorService.GetById(id);
+                if (op != null)
+                {
+                    Console.WriteLine($"\nОператор: {op.Name}");
+                    Console.ForegroundColor = ConsoleColor.Yellow;
+                    Console.Write("  Ви впевнені? (y/n): ");
+                    Console.ResetColor();
+
+                    if (Console.ReadLine()?.ToLower() == "y")
+                    {
+                        var result = _operatorService.Delete(id);
+
+                        if (result.Success)
+                        {
+                            Console.ForegroundColor = ConsoleColor.Green;
+                            Console.WriteLine(" Оператора видалено!");
+                            Console.ResetColor();
+                        }
+                        else
+                        {
+                            Console.ForegroundColor = ConsoleColor.Red;
+                            Console.WriteLine(" Помилка при видаленні!");
+                            Console.ResetColor();
+                        }
+                    }
+                    else
+                    {
+                        Console.WriteLine("Операцію скасовано.");
+                    }
+                }
+                else
+                {
+                    Console.WriteLine(" Оператора не знайдено!");
+                }
+            }
+            else
+            {
+                Console.WriteLine(" Невірний ID!");
             }
 
             Console.ReadKey();
         }
 
+        // ============== МЕНЮ ТОЧОК ДОСТАВКИ ==============
+
         static void DeliveryPointMenu()
         {
-            Console.Clear();
-            Console.WriteLine("=== УПРАВЛІННЯ ТОЧКАМИ ДОСТАВКИ ===");
-            Console.WriteLine("1. Додати точку доставки");
-            Console.WriteLine("2. Переглянути всі точки");
-            Console.WriteLine("3. Видалити точку");
-            Console.WriteLine("0. Назад");
-            Console.Write("\nОберіть опцію: ");
-
-            string choice = Console.ReadLine();
-
-            switch (choice)
+            while (true)
             {
-                case "1":
-                    AddDeliveryPoint();
-                    break;
-                case "2":
-                    ViewAllDeliveryPoints();
-                    break;
-                case "3":
-                    Console.Write("ID точки: ");
-                    if (int.TryParse(Console.ReadLine(), out int id))
-                    {
-                        var result = _deliveryPointService.Delete(id);
-                        Console.WriteLine(result.Success ? "Точку видалено!" : "Помилка!");
-                    }
-                    Console.ReadKey();
-                    break;
+                Console.Clear();
+                Console.WriteLine("═══ УПРАВЛІННЯ ТОЧКАМИ ДОСТАВКИ ═══\n");
+                Console.WriteLine("1. Додати точку доставки");
+                Console.WriteLine("2. Переглянути всі точки");
+                Console.WriteLine("3. Пошук точки за адресою");
+                Console.WriteLine("4. Видалити точку");
+                Console.WriteLine("0. Назад");
+                Console.Write("\nОберіть опцію: ");
+
+                string choice = Console.ReadLine() ?? "";
+
+                switch (choice)
+                {
+                    case "1":
+                        AddDeliveryPoint();
+                        break;
+                    case "2":
+                        ViewAllDeliveryPoints();
+                        break;
+                    case "3":
+                        SearchDeliveryPoint();
+                        break;
+                    case "4":
+                        DeleteDeliveryPoint();
+                        break;
+                    case "0":
+                        return;
+                }
             }
         }
 
         static void AddDeliveryPoint()
         {
             Console.Clear();
-            Console.WriteLine("=== ДОДАТИ ТОЧКУ ДОСТАВКИ ===");
+            Console.WriteLine("═══ ДОДАТИ ТОЧКУ ДОСТАВКИ ═══\n");
 
-            Console.WriteLine("\nТип точки:");
+            Console.WriteLine("Тип точки:");
             Console.WriteLine("1. Відділення");
             Console.WriteLine("2. Поштомат");
             Console.WriteLine("3. Адресна доставка");
-            Console.WriteLine("4. Таксі");
+            Console.WriteLine("4. Таксі (Уклон)");
             Console.Write("Оберіть: ");
 
             DeliveryType type = Console.ReadLine() switch
@@ -916,26 +1968,40 @@ namespace PresentationLayer
                 _ => DeliveryType.Office
             };
 
-            Console.Write("Адреса: ");
-            string address = Console.ReadLine();
+            Console.Write("\nАдреса: ");
+            string address = Console.ReadLine() ?? "";
 
             Console.Write("Поштовий індекс: ");
-            string postalCode = Console.ReadLine();
+            string postalCode = Console.ReadLine() ?? "";
 
-            Console.Write("Назва організації (необов'язково): ");
+            Console.Write("Назва організації (Enter - пропустити): ");
             string orgName = Console.ReadLine();
 
             var result = _deliveryPointService.Add(type, address, postalCode,
-                string.IsNullOrEmpty(orgName) ? null : orgName);
+                string.IsNullOrWhiteSpace(orgName) ? null : orgName);
 
-            Console.WriteLine(result.Success ? "\nТочку доставки додано!" : "\nПомилка!");
+            if (result.Success)
+            {
+                var point = (DeliveryPoint)result.Data;
+                Console.ForegroundColor = ConsoleColor.Green;
+                Console.WriteLine($"\n Точку доставки додано! ID: {point.Id}");
+                Console.ResetColor();
+            }
+            else
+            {
+                Console.ForegroundColor = ConsoleColor.Red;
+                Console.WriteLine($"\n Помилка: {result.Data}");
+                Console.ResetColor();
+            }
+
+            Console.WriteLine("\nНатисніть будь-яку клавішу...");
             Console.ReadKey();
         }
 
         static void ViewAllDeliveryPoints()
         {
             Console.Clear();
-            Console.WriteLine("=== ВСІ ТОЧКИ ДОСТАВКИ ===\n");
+            Console.WriteLine("═══ ВСІ ТОЧКИ ДОСТАВКИ ═══\n");
 
             var points = _deliveryPointService.GetAll();
 
@@ -945,520 +2011,392 @@ namespace PresentationLayer
             }
             else
             {
-                foreach (var point in points)
+                var groupedPoints = points.GroupBy(p => p.Type);
+
+                foreach (var group in groupedPoints)
                 {
-                    Console.WriteLine($"ID: {point.Id} | Тип: {point.Type}");
-                    Console.WriteLine($"   Адреса: {point.Address}");
-                    Console.WriteLine($"   Індекс: {point.PostalCode}");
-                    if (!string.IsNullOrEmpty(point.OrganizationName))
-                        Console.WriteLine($"   Організація: {point.OrganizationName}");
-                    Console.WriteLine();
+                    Console.ForegroundColor = ConsoleColor.Yellow;
+                    Console.WriteLine($"\n▼ {GetDeliveryTypeName(group.Key)} ({group.Count()})");
+                    Console.ResetColor();
+                    Console.WriteLine(new string('─', 50));
+
+                    foreach (var point in group)
+                    {
+                        Console.ForegroundColor = ConsoleColor.Cyan;
+                        Console.WriteLine($"ID: {point.Id,-3} | {point.Address}");
+                        Console.ResetColor();
+                        Console.WriteLine($"  Індекс: {point.PostalCode}");
+                        if (!string.IsNullOrEmpty(point.OrganizationName))
+                            Console.WriteLine($" {point.OrganizationName}");
+                        Console.WriteLine();
+                    }
                 }
+            }
+
+            Console.WriteLine("Натисніть будь-яку клавішу...");
+            Console.ReadKey();
+        }
+
+        static void SearchDeliveryPoint()
+        {
+            Console.Clear();
+            Console.WriteLine("═══ ПОШУК ТОЧКИ ДОСТАВКИ ═══\n");
+            Console.Write("Введіть адресу або індекс: ");
+            string query = Console.ReadLine()?.ToLower() ?? "";
+
+            var points = _deliveryPointService.GetAll()
+                .Where(p => p.Address.ToLower().Contains(query) ||
+                           p.PostalCode.Contains(query) ||
+                           (p.OrganizationName != null && p.OrganizationName.ToLower().Contains(query)))
+                .ToList();
+
+            Console.WriteLine($"\n✓ Знайдено точок: {points.Count}\n");
+
+            foreach (var point in points)
+            {
+                Console.ForegroundColor = ConsoleColor.Cyan;
+                Console.WriteLine($"ID: {point.Id} | {GetDeliveryTypeName(point.Type)}");
+                Console.ResetColor();
+                Console.WriteLine($"    {point.Address}");
+                Console.WriteLine($"    {point.PostalCode}");
+                if (!string.IsNullOrEmpty(point.OrganizationName))
+                    Console.WriteLine($"    {point.OrganizationName}");
+                Console.WriteLine();
+            }
+
+            Console.WriteLine("Натисніть будь-яку клавішу...");
+            Console.ReadKey();
+        }
+
+        static void DeleteDeliveryPoint()
+        {
+            Console.Clear();
+            Console.WriteLine("═══ ВИДАЛИТИ ТОЧКУ ДОСТАВКИ ═══\n");
+            Console.Write("ID точки: ");
+
+            if (int.TryParse(Console.ReadLine(), out int id))
+            {
+                var point = _deliveryPointService.GetById(id);
+                if (point != null)
+                {
+                    Console.WriteLine($"\nТочка: {point.Address}");
+                    Console.ForegroundColor = ConsoleColor.Yellow;
+                    Console.Write("  Ви впевнені? (y/n): ");
+                    Console.ResetColor();
+
+                    if (Console.ReadLine()?.ToLower() == "y")
+                    {
+                        var result = _deliveryPointService.Delete(id);
+
+                        if (result.Success)
+                        {
+                            Console.ForegroundColor = ConsoleColor.Green;
+                            Console.WriteLine(" Точку видалено!");
+                            Console.ResetColor();
+                        }
+                        else
+                        {
+                            Console.ForegroundColor = ConsoleColor.Red;
+                            Console.WriteLine(" Помилка при видаленні!");
+                            Console.ResetColor();
+                        }
+                    }
+                    else
+                    {
+                        Console.WriteLine("Операцію скасовано.");
+                    }
+                }
+                else
+                {
+                    Console.WriteLine(" Точку не знайдено!");
+                }
+            }
+            else
+            {
+                Console.WriteLine(" Невірний ID!");
             }
 
             Console.ReadKey();
         }
+
+        // ============== СТАТИСТИКА ==============
 
         static void ShowStatistics()
         {
             Console.Clear();
-            Console.WriteLine("=== СТАТИСТИКА ===\n");
+            Console.WriteLine("╔════════════════════════════════════════════════╗");
+            Console.WriteLine("║              СТАТИСТИКА СИСТЕМИ                ║");
+            Console.WriteLine("╚════════════════════════════════════════════════╝\n");
+
+            Console.WriteLine("1. Загальна статистика");
+            Console.WriteLine("2. Статистика за період");
+            Console.WriteLine("3. Статистика по клієнтах");
+            Console.WriteLine("4. Статистика по операторах");
+            Console.WriteLine("5. Популярні напрямки");
+            Console.WriteLine("0. Назад");
+            Console.Write("\nОберіть опцію: ");
+
+            string choice = Console.ReadLine() ?? "";
+
+            switch (choice)
+            {
+                case "1":
+                    ShowGeneralStatistics();
+                    break;
+                case "2":
+                    ShowPeriodStatistics();
+                    break;
+                case "3":
+                    ShowClientStatistics();
+                    break;
+                case "4":
+                    ShowOperatorStatistics();
+                    break;
+                case "5":
+                    ShowPopularDestinations();
+                    break;
+            }
+        }
+
+        static void ShowGeneralStatistics()
+        {
+            Console.Clear();
+            Console.WriteLine("═══ ЗАГАЛЬНА СТАТИСТИКА ═══\n");
 
             var stats = _statisticsService.GetStatistics();
 
-            Console.WriteLine("--- ЗАГАЛЬНА ІНФОРМАЦІЯ ---");
+            Console.WriteLine(" ПОСИЛКИ:");
+            Console.WriteLine($"   Всього: {stats["TotalParcels"]}");
+            Console.ForegroundColor = ConsoleColor.Green;
+            Console.WriteLine($"   Доставлено: {stats["Delivered"]}");
+            Console.ResetColor();
+            Console.ForegroundColor = ConsoleColor.Blue;
+            Console.WriteLine($"   В дорозі: {stats["InTransit"]}");
+            Console.ResetColor();
+            Console.ForegroundColor = ConsoleColor.Yellow;
+            Console.WriteLine($"   Очікують: {stats["AwaitingShipment"]}");
+            Console.ResetColor();
+            Console.ForegroundColor = ConsoleColor.Cyan;
+            Console.WriteLine($"   Прийнято: {stats["AcceptedByOperator"]}");
+            Console.ResetColor();
+            Console.ForegroundColor = ConsoleColor.Magenta;
+            Console.WriteLine($"   На складі: {stats["AtWarehouse"]}");
+            Console.ResetColor();
+            Console.ForegroundColor = ConsoleColor.Red;
+            Console.WriteLine($"   Втрачено: {stats["Lost"]}");
+            Console.ResetColor();
+
+            if (stats.ContainsKey("AvgLocalDelivery"))
+            {
+                Console.WriteLine($"\n  СЕРЕДНІЙ ЧАС ДОСТАВКИ:");
+                Console.WriteLine($"   Локальна: {stats["AvgLocalDelivery"]:F1} днів");
+            }
+
+            if (stats.ContainsKey("AvgInternationalDelivery"))
+            {
+                Console.WriteLine($"   Міжнародна: {stats["AvgInternationalDelivery"]:F1} днів");
+            }
+
+            Console.WriteLine($"\n КЛІЄНТИ: {_clientService.GetAll().Count}");
+            Console.WriteLine($" ОПЕРАТОРИ: {_operatorService.GetAll().Count}");
+            Console.WriteLine($" ТОЧКИ ДОСТАВКИ: {_deliveryPointService.GetAll().Count}");
+
+            // ТОП-3 операторів
+            Console.WriteLine("\n ТОП-3 ОПЕРАТОРІВ:");
+            var topOps = (List<Operator>)stats["TopOperators"];
+            int position = 1;
+            foreach (var op in topOps)
+            {
+                Console.ForegroundColor = position switch
+                {
+                    1 => ConsoleColor.Yellow,
+                    2 => ConsoleColor.Gray,
+                    3 => ConsoleColor.DarkYellow,
+                    _ => ConsoleColor.White
+                };
+                Console.WriteLine($"   {position}. {op.Name}: {op.ProcessedParcels} посилок");
+                Console.ResetColor();
+                position++;
+            }
+
+            Console.WriteLine("\nНатисніть будь-яку клавішу...");
+            Console.ReadKey();
+        }
+
+        static void ShowPeriodStatistics()
+        {
+            Console.Clear();
+            Console.WriteLine("═══ СТАТИСТИКА ЗА ПЕРІОД ═══\n");
+
+            Console.WriteLine("1. За сьогодні");
+            Console.WriteLine("2. За тиждень");
+            Console.WriteLine("3. За місяць");
+            Console.WriteLine("4. За рік");
+            Console.WriteLine("5. Власний період");
+            Console.Write("\nОберіть: ");
+
+            string choice = Console.ReadLine() ?? "";
+            DateTime? fromDate = null;
+            DateTime? toDate = DateTime.Now;
+
+            switch (choice)
+            {
+                case "1":
+                    fromDate = DateTime.Today;
+                    break;
+                case "2":
+                    fromDate = DateTime.Today.AddDays(-7);
+                    break;
+                case "3":
+                    fromDate = DateTime.Today.AddMonths(-1);
+                    break;
+                case "4":
+                    fromDate = DateTime.Today.AddYears(-1);
+                    break;
+                case "5":
+                    Console.Write("\nДата початку (dd.MM.yyyy): ");
+                    if (DateTime.TryParse(Console.ReadLine(), out DateTime from))
+                        fromDate = from;
+                    Console.Write("Дата кінця (dd.MM.yyyy): ");
+                    if (DateTime.TryParse(Console.ReadLine(), out DateTime to))
+                        toDate = to;
+                    break;
+            }
+
+            var stats = _statisticsService.GetStatistics(fromDate, toDate);
+
+            Console.WriteLine($"\n Період: {fromDate:dd.MM.yyyy} - {toDate:dd.MM.yyyy}\n");
             Console.WriteLine($"Всього посилок: {stats["TotalParcels"]}");
             Console.WriteLine($"Доставлено: {stats["Delivered"]}");
             Console.WriteLine($"Втрачено: {stats["Lost"]}");
-            Console.WriteLine($"В дорозі: {stats["InTransit"]}");
-            Console.WriteLine($"Очікують відправки: {stats["AwaitingShipment"]}");
-            Console.WriteLine($"Прийнято оператором: {stats["AcceptedByOperator"]}");
-            Console.WriteLine($"На складі: {stats["AtWarehouse"]}");
 
             if (stats.ContainsKey("AvgLocalDelivery"))
-                Console.WriteLine($"\nСередній час локальної доставки: {stats["AvgLocalDelivery"]:F1} днів");
+                Console.WriteLine($"Середній час (локальна): {stats["AvgLocalDelivery"]:F1} днів");
 
-            if (stats.ContainsKey("AvgInternationalDelivery"))
-                Console.WriteLine($"Середній час міжнародної доставки: {stats["AvgInternationalDelivery"]:F1} днів");
-
-            Console.WriteLine("\n--- ТОП-3 ОПЕРАТОРІВ ---");
-            var topOps = (List<Operator>)stats["TopOperators"];
-            foreach (var op in topOps)
-            {
-                Console.WriteLine($"{op.Name}: {op.ProcessedParcels} посилок");
-            }
-
-            if (stats.ContainsKey("PopularDestinations"))
-            {
-                Console.WriteLine("\n--- ПОПУЛЯРНІ НАПРЯМКИ ДОСТАВКИ ---");
-                var destinations = (List<KeyValuePair<string, int>>)stats["PopularDestinations"];
-                int position = 1;
-                foreach (var dest in destinations.Take(5))
-                {
-                    Console.WriteLine($"{position}. {dest.Key}: {dest.Value} посилок");
-                    position++;
-                }
-            }
-
-            Console.ReadKey();
-        }
-        // ============== МЕТОДИ АУТЕНТИФІКАЦІЇ ==============
-
-/// <summary>
-/// Аутентифікація користувача
-/// </summary>
-static bool AuthenticateUser()
-{
-    while (true)
-    {
-        Console.Clear();
-        Console.WriteLine("╔══════════════════════════════════════╗");
-        Console.WriteLine("║       MATEPOST - ВХІД В СИСТЕМУ      ║");
-        Console.WriteLine("╚══════════════════════════════════════╝");
-        Console.WriteLine();
-        Console.WriteLine("1. Логін");
-        Console.WriteLine("0. Вихід");
-        Console.WriteLine();
-        Console.Write("Оберіть опцію: ");
-
-        string choice = Console.ReadLine() ?? "";
-
-        switch (choice)
-        {
-            case "1":
-                if (Login())
-                    return true;
-                break;
-            case "0":
-                return false;
-        }
-    }
-}
-
-/// <summary>
-/// Логін користувача
-/// </summary>
-static bool Login()
-{
-    Console.Clear();
-    Console.WriteLine("═══ ЛОГІН ═══");
-    Console.WriteLine();
-    Console.ForegroundColor = ConsoleColor.Yellow;
-    Console.WriteLine("  Дефолтний адмін:");
-    Console.WriteLine("  Логін: admin");
-    Console.WriteLine("  Пароль: Admin_password1");
-    Console.ResetColor();
-    Console.WriteLine();
-    
-    Console.Write("Логін: ");
-    string username = Console.ReadLine() ?? "";
-    
-    Console.Write("Пароль: ");
-    string password = ReadPassword();
-
-    Console.WriteLine();
-    Console.Write(" Підключення до сервера...");
-
-    try
-    {
-        var result = _authService.LoginAsync(username, password).Result;
-
-        if (result.Success)
-        {
-            dynamic data = result.Data;
-            _currentUserToken = data.Token;
-            _currentUserRole = data.Role;
-            _currentUsername = username;
-
-            Console.WriteLine(" ✓");
-            Console.ForegroundColor = ConsoleColor.Green;
-            Console.WriteLine($"\n✓ Вхід виконано!");
-            Console.WriteLine($"  Роль: {_currentUserRole}");
-            Console.ResetColor();
             Console.WriteLine("\nНатисніть будь-яку клавішу...");
             Console.ReadKey();
-            return true;
         }
-        else
+
+        static void ShowClientStatistics()
         {
-            Console.WriteLine(" ✗");
-            Console.ForegroundColor = ConsoleColor.Red;
-            Console.WriteLine($"\n✗ Помилка входу");
-            Console.WriteLine($"  {result.Data}");
-            Console.ResetColor();
+            Console.Clear();
+            Console.WriteLine("═══ СТАТИСТИКА ПО КЛІЄНТАХ ═══\n");
+
+            var clients = _clientService.GetAll();
+            var statusGroups = clients.GroupBy(c => c.Status);
+
+            Console.WriteLine(" РОЗПОДІЛ ЗА СТАТУСАМИ:\n");
+
+            foreach (var group in statusGroups.OrderBy(g => g.Key))
+            {
+                Console.ForegroundColor = GetLoyaltyColor(group.Key);
+                Console.WriteLine($"{GetLoyaltyStatusName(group.Key)}: {group.Count()} клієнтів");
+                Console.ResetColor();
+            }
+
+            Console.WriteLine($"\n Всього клієнтів: {clients.Count}");
+            Console.WriteLine($" Організацій: {clients.Count(c => c.Type == ClientType.Organization)}");
+            Console.WriteLine($" Фіз. осіб: {clients.Count(c => c.Type == ClientType.Individual)}");
+
+            // ТОП-5 клієнтів за кількістю посилок
+            Console.WriteLine("\n ТОП-5 КЛІЄНТІВ:");
+            var topClients = clients
+                .Select(c => new { Client = c, Count = _clientService.GetClientParcelCount(c.Id) })
+                .OrderByDescending(x => x.Count)
+                .Take(5);
+
+            int pos = 1;
+            foreach (var item in topClients)
+            {
+                Console.WriteLine($"   {pos}. {item.Client.FullName}: {item.Count} посилок");
+                pos++;
+            }
+
             Console.WriteLine("\nНатисніть будь-яку клавішу...");
             Console.ReadKey();
-            return false;
         }
-    }
-    catch (Exception ex)
-    {
-        Console.WriteLine(" ✗");
-        Console.ForegroundColor = ConsoleColor.Red;
-        Console.WriteLine("\n✗ Помилка з'єднання з сервером!");
-        Console.WriteLine($"  {ex.Message}");
-        Console.WriteLine("\nПереконайтесь що Security API запущений:");
-        Console.WriteLine("   cd Security && dotnet run");
-        Console.ResetColor();
-        Console.WriteLine("\nНатисніть будь-яку клавішу...");
-        Console.ReadKey();
-        return false;
-    }
-}
 
-/// <summary>
-/// Читання пароля з прихованням символів
-/// </summary>
-static string ReadPassword()
-{
-    string password = "";
-    ConsoleKeyInfo key;
-
-    do
-    {
-        key = Console.ReadKey(true);
-
-        if (key.Key != ConsoleKey.Backspace && key.Key != ConsoleKey.Enter)
+        static void ShowOperatorStatistics()
         {
-            password += key.KeyChar;
-            Console.Write("*");
-        }
-        else if (key.Key == ConsoleKey.Backspace && password.Length > 0)
-        {
-            password = password.Substring(0, password.Length - 1);
-            Console.Write("\b \b");
-        }
-    } while (key.Key != ConsoleKey.Enter);
+            Console.Clear();
+            Console.WriteLine("═══ СТАТИСТИКА ПО ОПЕРАТОРАХ ═══\n");
 
-    Console.WriteLine();
-    return password;
-}
+            var operators = _operatorService.GetAll();
 
-// ============== УПРАВЛІННЯ КОРИСТУВАЧАМИ (тільки для Admin) ==============
-
-/// <summary>
-/// Меню управління користувачами
-/// </summary>
-static void UserManagementMenu()
-{
-    if (_currentUserRole != "Admin")
-    {
-        Console.ForegroundColor = ConsoleColor.Red;
-        Console.WriteLine("\n✗ Доступ заборонено! Тільки для адміністраторів.");
-        Console.ResetColor();
-        Console.ReadKey();
-        return;
-    }
-
-    while (true)
-    {
-        Console.Clear();
-        Console.WriteLine("═══ УПРАВЛІННЯ КОРИСТУВАЧАМИ ═══");
-        Console.WriteLine();
-        Console.WriteLine("1. Список користувачів");
-        Console.WriteLine("2. Зареєструвати нового користувача");
-        Console.WriteLine("3. Змінити роль користувача");
-        Console.WriteLine("4. Змінити свій пароль");
-        Console.WriteLine("0. Назад");
-        Console.WriteLine();
-        Console.Write("Оберіть опцію: ");
-
-        string choice = Console.ReadLine() ?? "";
-
-        switch (choice)
-        {
-            case "1":
-                ListUsers();
-                break;
-            case "2":
-                RegisterNewUser();
-                break;
-            case "3":
-                ChangeUserRole();
-                break;
-            case "4":
-                ChangePassword();
-                break;
-            case "0":
-                return;
-        }
-    }
-}
-
-/// <summary>
-/// Список всіх користувачів
-/// </summary>
-static void ListUsers()
-{
-    Console.Clear();
-    Console.WriteLine("═══ СПИСОК КОРИСТУВАЧІВ ═══");
-    Console.WriteLine();
-
-    try
-    {
-        var result = _authService.GetUsersAsync(_currentUserToken).Result;
-
-        if (result.Success)
-        {
-            var users = (UserInfo[])result.Data;
-            
-            if (users.Length == 0)
+            if (operators.Count == 0)
             {
-                Console.WriteLine("Користувачів не знайдено.");
+                Console.WriteLine("Операторів не знайдено.");
             }
             else
             {
-                Console.WriteLine($"{"Логін",-20} {"Роль",-15}");
-                Console.WriteLine(new string('─', 40));
-                
-                foreach (var user in users)
+                Console.WriteLine($"{"Оператор",-25} {"Посилок",-12} {"Ефективність",-15}");
+                Console.WriteLine(new string('─', 55));
+
+                foreach (var op in operators.OrderByDescending(o => o.ProcessedParcels))
                 {
-                    Console.Write($"{user.username,-20} ");
-                    
-                    // Кольорове відображення ролі
-                    Console.ForegroundColor = user.role switch
-                    {
-                        "Admin" => ConsoleColor.Red,
-                        "Manager" => ConsoleColor.Yellow,
-                        "Operator" => ConsoleColor.Cyan,
-                        "Client" => ConsoleColor.Green,
-                        _ => ConsoleColor.White
-                    };
-                    Console.WriteLine($"{user.role,-15}");
+                    Console.Write($"{op.Name,-25} {op.ProcessedParcels,-12} ");
+
+                    Console.ForegroundColor = GetEfficiencyColor(op.Efficiency);
+                    Console.WriteLine($"{op.Efficiency:F1}%");
                     Console.ResetColor();
                 }
+
+                Console.WriteLine($"\n Всього операторів: {operators.Count}");
+                Console.WriteLine($" Оброблено посилок: {operators.Sum(o => o.ProcessedParcels)}");
+                Console.WriteLine($" Середня ефективність: {operators.Average(o => o.Efficiency):F1}%");
             }
-        }
-        else
-        {
-            Console.ForegroundColor = ConsoleColor.Red;
-            Console.WriteLine($"✗ Помилка: {result.Data}");
-            Console.ResetColor();
-        }
-    }
-    catch (Exception ex)
-    {
-        Console.ForegroundColor = ConsoleColor.Red;
-        Console.WriteLine($"✗ Помилка: {ex.Message}");
-        Console.ResetColor();
-    }
 
-    Console.WriteLine();
-    Console.WriteLine("Натисніть будь-яку клавішу...");
-    Console.ReadKey();
-}
-
-/// <summary>
-/// Реєстрація нового користувача (тільки адміном)
-/// </summary>
-static void RegisterNewUser()
-{
-    Console.Clear();
-    Console.WriteLine("═══ РЕЄСТРАЦІЯ КОРИСТУВАЧА ═══");
-    Console.WriteLine();
-    
-    Console.Write("Логін: ");
-    string username = Console.ReadLine() ?? "";
-    
-    if (string.IsNullOrWhiteSpace(username))
-    {
-        Console.ForegroundColor = ConsoleColor.Red;
-        Console.WriteLine("✗ Логін не може бути порожнім!");
-        Console.ResetColor();
-        Console.ReadKey();
-        return;
-    }
-    
-    Console.Write("Пароль: ");
-    string password = ReadPassword();
-    
-    Console.WriteLine();
-    Console.WriteLine("Роль:");
-    Console.WriteLine("1. Admin");
-    Console.WriteLine("2. Manager");
-    Console.WriteLine("3. Operator");
-    Console.WriteLine("4. Client");
-    Console.Write("Оберіть: ");
-    
-    string role = Console.ReadLine() switch
-    {
-        "1" => "Admin",
-        "2" => "Manager",
-        "3" => "Operator",
-        _ => "Client"
-    };
-
-    Console.WriteLine();
-    Console.Write("Створення користувача...");
-
-    try
-    {
-        var result = _authService.RegisterAsync(_currentUserToken, username, password, role).Result;
-
-        if (result.Success)
-        {
-            Console.WriteLine(" ✓");
-            Console.ForegroundColor = ConsoleColor.Green;
-            Console.WriteLine($"\n✓ {result.Data}");
-            Console.ResetColor();
-        }
-        else
-        {
-            Console.WriteLine(" ✗");
-            Console.ForegroundColor = ConsoleColor.Red;
-            Console.WriteLine($"\n✗ {result.Data}");
-            Console.ResetColor();
-        }
-    }
-    catch (Exception ex)
-    {
-        Console.WriteLine(" ✗");
-        Console.ForegroundColor = ConsoleColor.Red;
-        Console.WriteLine($"\n✗ Помилка: {ex.Message}");
-        Console.ResetColor();
-    }
-
-    Console.WriteLine("\nНатисніть будь-яку клавішу...");
-    Console.ReadKey();
-}
-
-/// <summary>
-/// Зміна ролі користувача
-/// </summary>
-static void ChangeUserRole()
-{
-    Console.Clear();
-    Console.WriteLine("═══ ЗМІНА РОЛІ КОРИСТУВАЧА ═══");
-    Console.WriteLine();
-    
-    Console.Write("Логін користувача: ");
-    string username = Console.ReadLine() ?? "";
-    
-    if (string.IsNullOrWhiteSpace(username))
-    {
-        Console.ForegroundColor = ConsoleColor.Red;
-        Console.WriteLine("✗ Логін не може бути порожнім!");
-        Console.ResetColor();
-        Console.ReadKey();
-        return;
-    }
-    
-    Console.WriteLine();
-    Console.WriteLine("Нова роль:");
-    Console.WriteLine("1. Admin");
-    Console.WriteLine("2. Manager");
-    Console.WriteLine("3. Operator");
-    Console.WriteLine("4. Client");
-    Console.Write("Оберіть: ");
-    
-    string role = Console.ReadLine() switch
-    {
-        "1" => "Admin",
-        "2" => "Manager",
-        "3" => "Operator",
-        _ => "Client"
-    };
-
-    Console.WriteLine();
-    Console.Write("Зміна ролі...");
-
-    try
-    {
-        var result = _authService.ChangeUserRoleAsync(_currentUserToken, username, role).Result;
-        
-        if (result.Success)
-        {
-            Console.WriteLine(" ✓");
-            Console.ForegroundColor = ConsoleColor.Green;
-            Console.WriteLine($"\n✓ {result.Data}");
-            Console.ResetColor();
-        }
-        else
-        {
-            Console.WriteLine(" ✗");
-            Console.ForegroundColor = ConsoleColor.Red;
-            Console.WriteLine($"\n✗ {result.Data}");
-            Console.ResetColor();
-        }
-    }
-    catch (Exception ex)
-    {
-        Console.WriteLine(" ✗");
-        Console.ForegroundColor = ConsoleColor.Red;
-        Console.WriteLine($"\n✗ Помилка: {ex.Message}");
-        Console.ResetColor();
-    }
-
-    Console.WriteLine("\nНатисніть будь-яку клавішу...");
-    Console.ReadKey();
-}
-
-/// <summary>
-/// Зміна власного пароля
-/// </summary>
-static void ChangePassword()
-{
-    Console.Clear();
-    Console.WriteLine("═══ ЗМІНА ПАРОЛЯ ═══");
-    Console.WriteLine();
-    
-    Console.Write("Старий пароль: ");
-    string oldPassword = ReadPassword();
-    
-    Console.Write("Новий пароль: ");
-    string newPassword = ReadPassword();
-    
-    Console.Write("Підтвердіть новий пароль: ");
-    string confirmPassword = ReadPassword();
-
-    if (newPassword != confirmPassword)
-    {
-        Console.ForegroundColor = ConsoleColor.Red;
-        Console.WriteLine("\n✗ Паролі не співпадають!");
-        Console.ResetColor();
-        Console.ReadKey();
-        return;
-    }
-
-    Console.WriteLine();
-    Console.Write("Зміна пароля...");
-
-    try
-    {
-        var result = _authService.ChangePasswordAsync(_currentUserToken, oldPassword, newPassword).Result;
-        
-        if (result.Success)
-        {
-            Console.WriteLine(" ✓");
-            Console.ForegroundColor = ConsoleColor.Green;
-            Console.WriteLine($"\n✓ {result.Data}");
-            Console.WriteLine("\nВи будете автоматично вийшли з системи.");
-            Console.WriteLine("Увійдіть знову з новим паролем.");
-            Console.ResetColor();
+            Console.WriteLine("\nНатисніть будь-яку клавішу...");
             Console.ReadKey();
-            
-            // Виходимо з програми після зміни пароля
-            Environment.Exit(0);
         }
-        else
+
+        static void ShowPopularDestinations()
         {
-            Console.WriteLine(" ✗");
-            Console.ForegroundColor = ConsoleColor.Red;
-            Console.WriteLine($"\n✗ {result.Data}");
-            Console.ResetColor();
+            Console.Clear();
+            Console.WriteLine("═══ ПОПУЛЯРНІ НАПРЯМКИ ДОСТАВКИ ═══\n");
+
+            var stats = _statisticsService.GetStatistics();
+            var destinations = (List<KeyValuePair<string, int>>)stats["PopularDestinations"];
+
+            if (destinations.Count == 0)
+            {
+                Console.WriteLine("Немає даних про напрямки.");
+            }
+            else
+            {
+                Console.WriteLine($"{"#",-5} {"Країна",-25} {"Посилок",-15}");
+                Console.WriteLine(new string('─', 50));
+
+                int position = 1;
+                foreach (var dest in destinations)
+                {
+                    Console.ForegroundColor = position switch
+                    {
+                        1 => ConsoleColor.Yellow,
+                        2 => ConsoleColor.Gray,
+                        3 => ConsoleColor.DarkYellow,
+                        _ => ConsoleColor.White
+                    };
+
+                    string medal = position switch
+                    {
+                        1 => "Перший",
+                        2 => "Другий",
+                        3 => "Третій",
+                        _ => "  "
+                    };
+
+                    Console.WriteLine($"{medal} {position,-3} {dest.Key,-25} {dest.Value,-15}");
+                    Console.ResetColor();
+                    position++;
+                }
+
+                Console.WriteLine($"\n Всього напрямків: {destinations.Count}");
+                Console.WriteLine($" Всього посилок: {destinations.Sum(d => d.Value)}");
+            }
+
+            Console.WriteLine("\nНатисніть будь-яку клавішу...");
+            Console.ReadKey();
         }
     }
-    catch (Exception ex)
-    {
-        Console.WriteLine(" ✗");
-        Console.ForegroundColor = ConsoleColor.Red;
-        Console.WriteLine($"\n✗ Помилка: {ex.Message}");
-        Console.ResetColor();
-    }
-
-    Console.WriteLine("\nНатисніть будь-яку клавішу...");
-    Console.ReadKey();
-}
-    }
-
 }

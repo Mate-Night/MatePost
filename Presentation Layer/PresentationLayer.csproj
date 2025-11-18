@@ -10,6 +10,7 @@
   <ItemGroup>
     <ProjectReference Include="..\Bussiness Logic Layer\BusinessLogicLayer.csproj" />
     <ProjectReference Include="..\Persistance Layer\PersistanceLayer.csproj" />
+    <ProjectReference Include="..\Integration Layer\Integration Layer.csproj" />
   </ItemGroup>
 
 </Project>

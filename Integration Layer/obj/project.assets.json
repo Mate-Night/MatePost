@@ -334,13 +334,13 @@
           "lib/netstandard2.0/_._": {}
         }
       },
-      "Microsoft.EntityFrameworkCore.Design/8.0.22": {
+      "Microsoft.EntityFrameworkCore.Design/8.0.0": {
         "type": "package",
         "dependencies": {
           "Humanizer.Core": "2.14.1",
           "Microsoft.CodeAnalysis.CSharp.Workspaces": "4.5.0",
-          "Microsoft.EntityFrameworkCore.Relational": "8.0.22",
-          "Microsoft.Extensions.DependencyModel": "8.0.2",
+          "Microsoft.EntityFrameworkCore.Relational": "8.0.0",
+          "Microsoft.Extensions.DependencyModel": "8.0.0",
           "Mono.TextTemplating": "2.2.1"
         },
         "compile": {
@@ -1519,19 +1519,18 @@
         "microsoft.entityframeworkcore.analyzers.nuspec"
       ]
     },
-    "Microsoft.EntityFrameworkCore.Design/8.0.22": {
-      "sha512": "l4qE4FuNkmFEZvui87sDi3vQMhNSpxsUDCGC9LwnTs2akk59bGhsjTcDp/Jt6hUTJaJ4uMDThAztHi3qeVhGHA==",
+    "Microsoft.EntityFrameworkCore.Design/8.0.0": {
+      "sha512": "94reKYu63jg4O75UI3LMJHwOSi8tQ6IfubiZhdnSsWcgtmAuF8OyLfjK/MIxuvaQRJZAF6E747FIuxjOtb8/og==",
       "type": "package",
-      "path": "microsoft.entityframeworkcore.design/8.0.22",
+      "path": "microsoft.entityframeworkcore.design/8.0.0",
       "files": [
         ".nupkg.metadata",
         ".signature.p7s",
         "Icon.png",
-        "PACKAGE.md",
         "build/net8.0/Microsoft.EntityFrameworkCore.Design.props",
         "lib/net8.0/Microsoft.EntityFrameworkCore.Design.dll",
         "lib/net8.0/Microsoft.EntityFrameworkCore.Design.xml",
-        "microsoft.entityframeworkcore.design.8.0.22.nupkg.sha512",
+        "microsoft.entityframeworkcore.design.8.0.0.nupkg.sha512",
         "microsoft.entityframeworkcore.design.nuspec"
       ]
     },
@@ -2392,7 +2391,7 @@
   "projectFileDependencyGroups": {
     "net8.0": [
       "BusinessLogicLayer >= 1.0.0",
-      "Microsoft.EntityFrameworkCore.Design >= 8.*",
+      "Microsoft.EntityFrameworkCore.Design >= 8.0.0",
       "Microsoft.EntityFrameworkCore.Sqlite >= 8.*"
     ]
   },
@@ -2403,11 +2402,11 @@
   "project": {
     "version": "1.0.0",
     "restore": {
-      "projectUniqueName": "C:\\Users\\malyt\\source\\repos\\MatePost\\Integration Layer\\Integration Layer.csproj",
+      "projectUniqueName": "C:\\Users\\malyt\\Source\\Repos\\MatePost\\Integration Layer\\Integration Layer.csproj",
       "projectName": "Integration Layer",
-      "projectPath": "C:\\Users\\malyt\\source\\repos\\MatePost\\Integration Layer\\Integration Layer.csproj",
+      "projectPath": "C:\\Users\\malyt\\Source\\Repos\\MatePost\\Integration Layer\\Integration Layer.csproj",
       "packagesPath": "C:\\Users\\malyt\\.nuget\\packages\\",
-      "outputPath": "C:\\Users\\malyt\\source\\repos\\MatePost\\Integration Layer\\obj\\",
+      "outputPath": "C:\\Users\\malyt\\Source\\Repos\\MatePost\\Integration Layer\\obj\\",
       "projectStyle": "PackageReference",
       "fallbackFolders": [
         "C:\\Program Files (x86)\\Microsoft Visual Studio\\Shared\\NuGetPackages"
@@ -2429,8 +2428,8 @@
         "net8.0": {
           "targetAlias": "net8.0",
           "projectReferences": {
-            "C:\\Users\\malyt\\source\\repos\\MatePost\\Bussiness Logic Layer\\BusinessLogicLayer.csproj": {
-              "projectPath": "C:\\Users\\malyt\\source\\repos\\MatePost\\Bussiness Logic Layer\\BusinessLogicLayer.csproj"
+            "C:\\Users\\malyt\\Source\\Repos\\MatePost\\Bussiness Logic Layer\\BusinessLogicLayer.csproj": {
+              "projectPath": "C:\\Users\\malyt\\Source\\Repos\\MatePost\\Bussiness Logic Layer\\BusinessLogicLayer.csproj"
             }
           }
         }
@@ -2455,7 +2454,7 @@
             "include": "Runtime, Build, Native, ContentFiles, Analyzers, BuildTransitive",
             "suppressParent": "All",
             "target": "Package",
-            "version": "[8.*, )"
+            "version": "[8.0.0, )"
           },
           "Microsoft.EntityFrameworkCore.Sqlite": {
             "target": "Package",

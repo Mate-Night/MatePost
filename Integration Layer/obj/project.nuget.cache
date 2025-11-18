@@ -1,8 +1,8 @@
 {
   "version": 2,
-  "dgSpecHash": "f7dQMmi+guA=",
+  "dgSpecHash": "3+do5TJ00dM=",
   "success": true,
-  "projectFilePath": "C:\\Users\\malyt\\source\\repos\\MatePost\\Integration Layer\\Integration Layer.csproj",
+  "projectFilePath": "C:\\Users\\malyt\\Source\\Repos\\MatePost\\Integration Layer\\Integration Layer.csproj",
   "expectedPackageFiles": [
     "C:\\Users\\malyt\\.nuget\\packages\\humanizer.core\\2.14.1\\humanizer.core.2.14.1.nupkg.sha512",
     "C:\\Users\\malyt\\.nuget\\packages\\microsoft.bcl.asyncinterfaces\\6.0.0\\microsoft.bcl.asyncinterfaces.6.0.0.nupkg.sha512",
@@ -15,7 +15,7 @@
     "C:\\Users\\malyt\\.nuget\\packages\\microsoft.entityframeworkcore\\8.0.22\\microsoft.entityframeworkcore.8.0.22.nupkg.sha512",
     "C:\\Users\\malyt\\.nuget\\packages\\microsoft.entityframeworkcore.abstractions\\8.0.22\\microsoft.entityframeworkcore.abstractions.8.0.22.nupkg.sha512",
     "C:\\Users\\malyt\\.nuget\\packages\\microsoft.entityframeworkcore.analyzers\\8.0.22\\microsoft.entityframeworkcore.analyzers.8.0.22.nupkg.sha512",
-    "C:\\Users\\malyt\\.nuget\\packages\\microsoft.entityframeworkcore.design\\8.0.22\\microsoft.entityframeworkcore.design.8.0.22.nupkg.sha512",
+    "C:\\Users\\malyt\\.nuget\\packages\\microsoft.entityframeworkcore.design\\8.0.0\\microsoft.entityframeworkcore.design.8.0.0.nupkg.sha512",
     "C:\\Users\\malyt\\.nuget\\packages\\microsoft.entityframeworkcore.relational\\8.0.22\\microsoft.entityframeworkcore.relational.8.0.22.nupkg.sha512",
     "C:\\Users\\malyt\\.nuget\\packages\\microsoft.entityframeworkcore.sqlite\\8.0.22\\microsoft.entityframeworkcore.sqlite.8.0.22.nupkg.sha512",
     "C:\\Users\\malyt\\.nuget\\packages\\microsoft.entityframeworkcore.sqlite.core\\8.0.22\\microsoft.entityframeworkcore.sqlite.core.8.0.22.nupkg.sha512",

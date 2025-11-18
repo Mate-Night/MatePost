@@ -96,7 +96,7 @@ namespace BusinessLogicLayer.Services
                     var result = JsonSerializer.Deserialize<LoginResponse>(responseText);
                     _currentToken = result.token;
 
-                    return OperationResult.Ok(new
+                    return OperationResult.Ok(new AuthData 
                     {
                         Token = result.token,
                         Role = result.role
@@ -238,6 +238,11 @@ namespace BusinessLogicLayer.Services
     }
 
     // ===== DTO класи для роботи з API =====
+    public class AuthData
+    {
+        public string Token { get; set; }
+        public string Role { get; set; }
+    }
 
     public class LoginResponse
     {

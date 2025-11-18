@@ -1,7 +1,7 @@
 {
   "format": 1,
   "restore": {
-    "C:\\Users\\malyt\\source\\repos\\MatePost\\Integration Layer\\Integration Layer.csproj": {}
+    "C:\\Users\\malyt\\Source\\Repos\\MatePost\\Integration Layer\\Integration Layer.csproj": {}
   },
   "projects": {
     "C:\\Users\\malyt\\Source\\Repos\\MatePost\\Bussiness Logic Layer\\BusinessLogicLayer.csproj": {
@@ -70,14 +70,14 @@
         }
       }
     },
-    "C:\\Users\\malyt\\source\\repos\\MatePost\\Integration Layer\\Integration Layer.csproj": {
+    "C:\\Users\\malyt\\Source\\Repos\\MatePost\\Integration Layer\\Integration Layer.csproj": {
       "version": "1.0.0",
       "restore": {
-        "projectUniqueName": "C:\\Users\\malyt\\source\\repos\\MatePost\\Integration Layer\\Integration Layer.csproj",
+        "projectUniqueName": "C:\\Users\\malyt\\Source\\Repos\\MatePost\\Integration Layer\\Integration Layer.csproj",
         "projectName": "Integration Layer",
-        "projectPath": "C:\\Users\\malyt\\source\\repos\\MatePost\\Integration Layer\\Integration Layer.csproj",
+        "projectPath": "C:\\Users\\malyt\\Source\\Repos\\MatePost\\Integration Layer\\Integration Layer.csproj",
         "packagesPath": "C:\\Users\\malyt\\.nuget\\packages\\",
-        "outputPath": "C:\\Users\\malyt\\source\\repos\\MatePost\\Integration Layer\\obj\\",
+        "outputPath": "C:\\Users\\malyt\\Source\\Repos\\MatePost\\Integration Layer\\obj\\",
         "projectStyle": "PackageReference",
         "fallbackFolders": [
           "C:\\Program Files (x86)\\Microsoft Visual Studio\\Shared\\NuGetPackages"
@@ -99,8 +99,8 @@
           "net8.0": {
             "targetAlias": "net8.0",
             "projectReferences": {
-              "C:\\Users\\malyt\\source\\repos\\MatePost\\Bussiness Logic Layer\\BusinessLogicLayer.csproj": {
-                "projectPath": "C:\\Users\\malyt\\source\\repos\\MatePost\\Bussiness Logic Layer\\BusinessLogicLayer.csproj"
+              "C:\\Users\\malyt\\Source\\Repos\\MatePost\\Bussiness Logic Layer\\BusinessLogicLayer.csproj": {
+                "projectPath": "C:\\Users\\malyt\\Source\\Repos\\MatePost\\Bussiness Logic Layer\\BusinessLogicLayer.csproj"
               }
             }
           }
@@ -125,7 +125,7 @@
               "include": "Runtime, Build, Native, ContentFiles, Analyzers, BuildTransitive",
               "suppressParent": "All",
               "target": "Package",
-              "version": "[8.*, )"
+              "version": "[8.0.0, )"
             },
             "Microsoft.EntityFrameworkCore.Sqlite": {
               "target": "Package",

@@ -1,0 +1,18 @@
+C:\Users\malyt\source\repos\MatePost\Integration Layer\bin\Debug\net8.0\Integration Layer.deps.json
+C:\Users\malyt\source\repos\MatePost\Integration Layer\bin\Debug\net8.0\Integration Layer.runtimeconfig.json
+C:\Users\malyt\source\repos\MatePost\Integration Layer\bin\Debug\net8.0\Integration Layer.dll
+C:\Users\malyt\source\repos\MatePost\Integration Layer\bin\Debug\net8.0\Integration Layer.pdb
+C:\Users\malyt\source\repos\MatePost\Integration Layer\bin\Debug\net8.0\BusinessLogicLayer.dll
+C:\Users\malyt\source\repos\MatePost\Integration Layer\bin\Debug\net8.0\BusinessLogicLayer.pdb
+C:\Users\malyt\source\repos\MatePost\Integration Layer\obj\Debug\net8.0\Integration Layer.csproj.AssemblyReference.cache
+C:\Users\malyt\source\repos\MatePost\Integration Layer\obj\Debug\net8.0\Integration Layer.GeneratedMSBuildEditorConfig.editorconfig
+C:\Users\malyt\source\repos\MatePost\Integration Layer\obj\Debug\net8.0\Integration Layer.AssemblyInfoInputs.cache
+C:\Users\malyt\source\repos\MatePost\Integration Layer\obj\Debug\net8.0\Integration Layer.AssemblyInfo.cs
+C:\Users\malyt\source\repos\MatePost\Integration Layer\obj\Debug\net8.0\Integration Layer.csproj.CoreCompileInputs.cache
+C:\Users\malyt\source\repos\MatePost\Integration Layer\obj\Debug\net8.0\Integration Layer.sourcelink.json
+C:\Users\malyt\source\repos\MatePost\Integration Layer\obj\Debug\net8.0\Integrat.F2B7A3F1.Up2Date
+C:\Users\malyt\source\repos\MatePost\Integration Layer\obj\Debug\net8.0\Integration Layer.dll
+C:\Users\malyt\source\repos\MatePost\Integration Layer\obj\Debug\net8.0\refint\Integration Layer.dll
+C:\Users\malyt\source\repos\MatePost\Integration Layer\obj\Debug\net8.0\Integration Layer.pdb
+C:\Users\malyt\source\repos\MatePost\Integration Layer\obj\Debug\net8.0\Integration Layer.genruntimeconfig.cache
+C:\Users\malyt\source\repos\MatePost\Integration Layer\obj\Debug\net8.0\ref\Integration Layer.dll
