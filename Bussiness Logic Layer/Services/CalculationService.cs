@@ -8,13 +8,10 @@ namespace BusinessLogicLayer.Services
     /// </summary>
     public class CalculationService
     {
-        /// <summary>
-        /// Сервіс для розрахунку вартості доставки
-        /// </summary>
         private decimal _currentEurRate = DeliveryConfiguration.EuroToUahRate;
 
         /// <summary>
-        /// Встановлює актуальний курс EUR/UAH
+        /// Встановлює актуальний курс EUR/UAH (викликається з MonobankService)
         /// </summary>
         public void SetEuroRate(decimal rate)
         {
@@ -28,6 +25,7 @@ namespace BusinessLogicLayer.Services
         /// Отримує поточний курс EUR/UAH
         /// </summary>
         public decimal GetEuroRate() => _currentEurRate;
+
         /// <summary>
         /// Розраховує базову вартість доставки посилки
         /// </summary>
@@ -38,15 +36,12 @@ namespace BusinessLogicLayer.Services
                 if (parcel == null)
                     throw new ArgumentNullException(nameof(parcel));
 
-                // Базова вартість залежить від типу доставки
                 decimal baseCost = parcel.Type == ParcelType.Local
                     ? DeliveryConfiguration.LocalBaseCost
                     : DeliveryConfiguration.InternationalBaseCost;
 
-                // Додавання вартості за вагу
                 baseCost += (decimal)parcel.Weight * DeliveryConfiguration.PricePerKg;
 
-                // Додавання вартості залежно від способу доставки
                 baseCost += parcel.DeliveryType switch
                 {
                     DeliveryType.Office => DeliveryConfiguration.OfficeDeliveryCost,
@@ -56,11 +51,9 @@ namespace BusinessLogicLayer.Services
                     _ => 0m
                 };
 
-                // Додаткова плата за крихкий вміст
                 if (parcel.ContentType == ContentType.Fragile)
                     baseCost += DeliveryConfiguration.FragileSurcharge;
 
-                // Вартість страхування
                 if (parcel.IsInsured)
                     baseCost += parcel.InsuranceValue * DeliveryConfiguration.InsuranceRate;
 
@@ -74,6 +67,7 @@ namespace BusinessLogicLayer.Services
 
         /// <summary>
         /// Розраховує імпортне мито для міжнародних посилок
+        /// ⭐ Використовує актуальний курс з Monobank API
         /// </summary>
         public decimal CalculateImportTax(Parcel parcel)
         {
@@ -82,12 +76,15 @@ namespace BusinessLogicLayer.Services
                 if (parcel == null || parcel.Type != ParcelType.International)
                     return 0m;
 
-                // Конвертація оціночної вартості в євро
+                // Конвертація оціночної вартості в євро за АКТУАЛЬНИМ курсом
                 decimal valueInEuro = parcel.DeclaredValue / _currentEurRate;
 
-                // Якщо вартість перевищує поріг, нараховується мито
+                // Якщо вартість перевищує 150 євро, нараховується мито 10%
                 if (valueInEuro > DeliveryConfiguration.CustomsThresholdEuro)
-                    return parcel.DeclaredValue * DeliveryConfiguration.CustomsTaxRate;
+                {
+                    decimal taxableAmount = parcel.DeclaredValue - (DeliveryConfiguration.CustomsThresholdEuro * _currentEurRate);
+                    return taxableAmount * DeliveryConfiguration.CustomsTaxRate;
+                }
 
                 return 0m;
             }

@@ -20,21 +20,20 @@ namespace BusinessLogicLayer.Services
         public AuthService(string baseUrl = "https://localhost:7030")
         {
             _baseUrl = baseUrl;
-            _httpClient = new HttpClient
+            var handler = new HttpClientHandler
             {
-                BaseAddress = new Uri(_baseUrl)
+                ServerCertificateCustomValidationCallback = HttpClientHandler.DangerousAcceptAnyServerCertificateValidator
             };
-            // Дозволяємо самопідписані сертифікати для HTTPS
-            var handler = new HttpClientHandler();
-            handler.ServerCertificateCustomValidationCallback = (message, cert, chain, errors) => true;
+
             _httpClient = new HttpClient(handler)
             {
-                BaseAddress = new Uri(_baseUrl)
+                BaseAddress = new Uri(_baseUrl),
+                Timeout = TimeSpan.FromSeconds(30)
             };
         }
 
         /// <summary>
-        /// Реєстрація нового користувача (ТІЛЬКИ для адміна)
+        /// Реєстрація нового користувача (для адміна)
         /// </summary>
         public async Task<OperationResult> RegisterAsync(string adminToken, string username, string password, string role)
         {
@@ -66,14 +65,18 @@ namespace BusinessLogicLayer.Services
 
                 return OperationResult.Fail($"Помилка реєстрації: {responseText}");
             }
+            catch (HttpRequestException ex)
+            {
+                return OperationResult.Fail($"Помилка з'єднання: {ex.Message}. Переконайтесь що Security API запущений.");
+            }
             catch (Exception ex)
             {
-                return OperationResult.Fail($"Помилка з'єднання: {ex.Message}");
+                return OperationResult.Fail($"Помилка: {ex.Message}");
             }
         }
 
         /// <summary>
-        /// Логін користувача (отримання токена)
+        /// Логін користувача 
         /// </summary>
         public async Task<OperationResult> LoginAsync(string username, string password)
         {
@@ -93,10 +96,14 @@ namespace BusinessLogicLayer.Services
 
                 if (response.IsSuccessStatusCode)
                 {
-                    var result = JsonSerializer.Deserialize<LoginResponse>(responseText);
+                    var result = JsonSerializer.Deserialize<LoginResponse>(responseText, new JsonSerializerOptions
+                    {
+                        PropertyNameCaseInsensitive = true
+                    });
+
                     _currentToken = result.token;
 
-                    return OperationResult.Ok(new AuthData 
+                    return OperationResult.Ok(new AuthData
                     {
                         Token = result.token,
                         Role = result.role
@@ -105,14 +112,18 @@ namespace BusinessLogicLayer.Services
 
                 return OperationResult.Fail($"Помилка логіну: {responseText}");
             }
+            catch (HttpRequestException ex)
+            {
+                return OperationResult.Fail($"Security API недоступний: {ex.Message}");
+            }
             catch (Exception ex)
             {
-                return OperationResult.Fail($"Помилка з'єднання: {ex.Message}");
+                return OperationResult.Fail($"Помилка: {ex.Message}");
             }
         }
 
         /// <summary>
-        /// Отримання списку всіх користувачів (потрібен токен адміна)
+        /// Отримання списку всіх користувачів
         /// </summary>
         public async Task<OperationResult> GetUsersAsync(string adminToken)
         {
@@ -126,18 +137,23 @@ namespace BusinessLogicLayer.Services
 
                 if (response.IsSuccessStatusCode)
                 {
-                    // API повертає Task<UsersResponse>[], розпаковуємо
+
                     var usersJson = JsonSerializer.Deserialize<JsonElement>(responseText);
                     var users = new List<UserInfo>();
 
-                    foreach (var userElement in usersJson.EnumerateArray())
+                    if (usersJson.ValueKind == JsonValueKind.Array)
                     {
-                        var resultProp = userElement.GetProperty("result");
-                        users.Add(new UserInfo
+                        foreach (var userElement in usersJson.EnumerateArray())
                         {
-                            username = resultProp.GetProperty("userName").GetString(),
-                            role = resultProp.GetProperty("role").GetString()
-                        });
+                            if (userElement.TryGetProperty("result", out var resultProp))
+                            {
+                                users.Add(new UserInfo
+                                {
+                                    username = resultProp.GetProperty("userName").GetString(),
+                                    role = resultProp.GetProperty("role").GetString()
+                                });
+                            }
+                        }
                     }
 
                     return OperationResult.Ok(users.ToArray());
@@ -152,7 +168,7 @@ namespace BusinessLogicLayer.Services
         }
 
         /// <summary>
-        /// Зміна ролі користувача (потрібен токен адміна)
+        /// Зміна ролі користувача 
         /// </summary>
         public async Task<OperationResult> ChangeUserRoleAsync(string adminToken, string username, string newRole)
         {
@@ -189,7 +205,7 @@ namespace BusinessLogicLayer.Services
         }
 
         /// <summary>
-        /// Зміна власного пароля (потрібен власний токен)
+        /// Зміна власного пароля 
         /// </summary>
         public async Task<OperationResult> ChangePasswordAsync(string userToken, string oldPassword, string newPassword)
         {
@@ -237,7 +253,6 @@ namespace BusinessLogicLayer.Services
         public void SetToken(string token) => _currentToken = token;
     }
 
-    // ===== DTO класи для роботи з API =====
     public class AuthData
     {
         public string Token { get; set; }

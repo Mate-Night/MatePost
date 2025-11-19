@@ -75,7 +75,6 @@ namespace IntegrationLayer.Services
             await _context.SaveChangesAsync();
         }
 
-
         public async Task<List<Operator>> GetAllOperatorsAsync()
         {
             return await _context.Operators.ToListAsync();
@@ -145,19 +144,39 @@ namespace IntegrationLayer.Services
             List<Operator> operators,
             List<DeliveryPoint> deliveryPoints)
         {
-            // Очищаємо БД
-            _context.Clients.RemoveRange(_context.Clients);
-            _context.Parcels.RemoveRange(_context.Parcels);
-            _context.Operators.RemoveRange(_context.Operators);
-            _context.DeliveryPoints.RemoveRange(_context.DeliveryPoints);
+            try
+            {
+                await _context.Database.EnsureDeletedAsync();
+                await _context.Database.EnsureCreatedAsync();
 
-            // Додаємо нові дані
-            await _context.Clients.AddRangeAsync(clients);
-            await _context.Operators.AddRangeAsync(operators);
-            await _context.DeliveryPoints.AddRangeAsync(deliveryPoints);
-            await _context.Parcels.AddRangeAsync(parcels);
+                if (clients != null && clients.Count > 0)
+                {
+                    await _context.Clients.AddRangeAsync(clients);
+                    await _context.SaveChangesAsync();
+                }
 
-            await _context.SaveChangesAsync();
+                if (operators != null && operators.Count > 0)
+                {
+                    await _context.Operators.AddRangeAsync(operators);
+                    await _context.SaveChangesAsync();
+                }
+
+                if (deliveryPoints != null && deliveryPoints.Count > 0)
+                {
+                    await _context.DeliveryPoints.AddRangeAsync(deliveryPoints);
+                    await _context.SaveChangesAsync();
+                }
+
+                if (parcels != null && parcels.Count > 0)
+                {
+                    await _context.Parcels.AddRangeAsync(parcels);
+                    await _context.SaveChangesAsync();
+                }
+            }
+            catch (Exception ex)
+            {
+                throw new Exception($"Помилка міграції: {ex.Message}", ex);
+            }
         }
     }
 }

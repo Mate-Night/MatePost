@@ -1,0 +1,40 @@
+[
+  {
+    "TrackingNumber": "202511182315252997",
+    "SenderId": 1,
+    "ReceiverId": 1,
+    "Type": 0,
+    "ContentType": 0,
+    "Weight": 1,
+    "DeclaredValue": 100.0,
+    "CurrentStatus": 0,
+    "Service": 0,
+    "DeliveryType": 0,
+    "CreatedAt": "2025-11-18T23:15:25.5515557",
+    "StatusHistory": [
+      {
+        "Id": 1,
+        "Status": 0,
+        "Timestamp": "2025-11-18T23:15:25.5519641",
+        "Note": ""
+      }
+    ],
+    "SenderCountry": "Ukraine",
+    "ReceiverCountry": "Ukraine",
+    "InsuranceValue": 30.0,
+    "IsInsured": true,
+    "EstimatedDeliveryDays": 4,
+    "Notifications": [
+      {
+        "Id": 1,
+        "Timestamp": "2025-11-18T23:15:25.552145",
+        "Status": 0,
+        "Note": "",
+        "DelayReason": null,
+        "DelayDays": null
+      }
+    ],
+    "IsPriorityProcessing": false,
+    "IsFreeDelivery": false
+  }
+]

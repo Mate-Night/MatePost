@@ -1,0 +1,13 @@
+[
+  {
+    "Id": 1,
+    "FullName": "Шевченко Олексій Іванович",
+    "Phone": "\u002B3809765644432",
+    "Email": "olex@gmail.com",
+    "Address": "вул. Червона",
+    "Type": 0,
+    "Status": 0,
+    "LastDiscountUsed": null,
+    "LastFreeDelivery": null
+  }
+]
